@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fantasy Football History</title>
+    <script>
+        window.onerror = function(msg, src, line, col, err) {
+            window.addEventListener('DOMContentLoaded', () => {
+                const overlay = document.getElementById('loading-overlay');
+                if (overlay) {
+                    overlay.innerHTML = `<div style="padding:2rem;color:red;"><h2>Crash:</h2><p>${msg}</p><p>Line: ${line}</p><pre>${err?.stack}</pre></div>`;
+                } else {
+                    document.body.innerHTML += `<div style="position:fixed;top:0;left:0;background:black;color:red;z-index:99999;padding:2rem;"><h2>Crash:</h2><p>${msg}</p><p>Line: ${line}</p></div>`;
+                }
+            });
+        };
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <p>Loading Historical Data...</p>
+    </div>
+
+    <header class="app-header">
+        <div class="header-content container">
+            <div class="logo-area">
+                <span class="icon">🏈</span>
+                <div>
+                    <h1>ESPN Fantasy History</h1>
+                    <p class="subtitle">League <span id="league-id-display">121269</span> • Since <span
+                            id="start-year-display">...</span></p>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="app-layout container">
+        <aside class="sidebar card">
+            <h2 class="sidebar-title">Team Owners</h2>
+            <ul id="owner-list" class="owner-list">
+                <!-- Owners injected here -->
+            </ul>
+        </aside>
+
+        <main class="main-content">
+        <nav class="tabs">
+            <button class="tab-btn active" data-tab="records">Records & History</button>
+            <button class="tab-btn" data-tab="current-season">Current Season</button>
+            <button class="tab-btn" data-tab="all-time-records">All Time Records</button>
+            <button class="tab-btn" data-tab="h2h">Head-to-Head</button>
+            <button class="tab-btn" data-tab="champions">Championships</button>
+        </nav>
+
+        <section id="records" class="tab-content active">
+            <div class="controls">
+                <label for="year-select">Select Year:</label>
+                <select id="year-select" class="dropdown">
+                    <option value="all-time">All-Time Statistics</option>
+                    <!-- Years will be injected here -->
+                </select>
+            </div>
+
+            <div class="card">
+                <div class="table-responsive">
+                    <table class="data-table" id="records-table">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Owner</th>
+                                <th class="sortable" data-sort="w">W</th>
+                                <th class="sortable" data-sort="l">L</th>
+                                <th class="sortable" data-sort="t">T</th>
+                                <th class="sortable" data-sort="winPct">Win %</th>
+                                <th class="sortable" data-sort="pf">PF</th>
+                                <th class="sortable" data-sort="pa">PA</th>
+                                <th class="sortable" data-sort="playoffW">Playoff Rec</th>
+                                <th class="sortable" data-sort="playoffs">Playoffs</th>
+                                <th class="sortable" data-sort="finals">Finals</th>
+                                <th class="sortable" data-sort="champs">Championships</th>
+                            </tr>
+                        </thead>
+                        <tbody id="records-body">
+                            <!-- Data injected here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <section id="h2h" class="tab-content">
+            <div class="card h2h-container">
+                <div class="h2h-selectors">
+                    <div class="selector-group">
+                        <label>Team 1</label>
+                        <select id="team1-select" class="dropdown">
+                            <!-- Teams injected here -->
+                        </select>
+                    </div>
+                    <div class="vs-badge">VS</div>
+                    <div class="selector-group">
+                        <label>Team 2</label>
+                        <select id="team2-select" class="dropdown">
+                            <!-- Teams injected here -->
+                        </select>
+                    </div>
+                </div>
+                <div id="h2h-results" class="h2h-results">
+                    <p class="placeholder-text">Select two teams to see their historical matchup data.</p>
+                </div>
+            </div>
+        </section>
+
+        <section id="champions" class="tab-content">
+            <div class="champions-grid" id="champions-grid">
+                <!-- Data injected here -->
+            </div>
+        </section>
+
+        <section id="all-time-records" class="tab-content">
+            <div id="all-time-records-content">
+                <!-- Data injected here -->
+            </div>
+        </section>
+
+        <section id="current-season" class="tab-content">
+            <div class="controls" style="justify-content: center; margin-top: 1rem;">
+                <label for="current-owner-select" style="font-weight: 600; font-size: 1.1rem;">Select Owner:</label>
+                <select id="current-owner-select" class="dropdown" style="font-size: 1.1rem; padding: 0.5rem 1.5rem;">
+                    <option value="" disabled selected>-- Select an Owner --</option>
+                    <!-- Teams injected here -->
+                </select>
+            </div>
+            <div class="card" style="padding: 4rem 2rem; text-align: center; margin-top: 1rem;">
+                <h2 style="color: var(--warning); font-size: 2rem; margin-bottom: 0.5rem;">Coming Soon...</h2>
+                <p style="color: var(--text-secondary);">The Live Current Season dashboard is actively under construction and will be here shortly.</p>
+            </div>
+        </section>
+
+        <section id="owner-profile" class="tab-content">
+            <div class="card" style="padding: 2rem;">
+                <h2 id="owner-profile-name" style="color: var(--accent); font-size: 2rem; margin-bottom: 2rem; text-align: center;">Owner Name</h2>
+                
+                <div class="owner-stats-grid">
+                    <div class="stats-section">
+                        <h3 class="section-title">Current Season (<span id="owner-current-year"></span>)</h3>
+                        <div class="stat-row"><span>Record:</span> <strong id="owner-current-record"></strong></div>
+                        <div class="stat-row"><span>Points For:</span> <strong id="owner-current-pf"></strong></div>
+                        <div class="stat-row"><span>Points Against:</span> <strong id="owner-current-pa"></strong></div>
+                        <div class="stat-row"><span>Avg Margin:</span> <strong id="owner-current-margin"></strong></div>
+                    </div>
+                    
+                    <div class="stats-section">
+                        <h3 class="section-title">Historical (All-Time)</h3>
+                        <div class="stat-row"><span>Record:</span> <strong id="owner-all-record"></strong></div>
+                        <div class="stat-row"><span>Points For:</span> <strong id="owner-all-pf"></strong></div>
+                        <div class="stat-row"><span>Points Against:</span> <strong id="owner-all-pa"></strong></div>
+                        <div class="stat-row"><span>Avg Margin:</span> <strong id="owner-all-margin"></strong></div>
+                        <hr style="border:0; border-top:1px solid var(--border-color); margin: 1.5rem 0;">
+                        <div class="stat-row"><span>Playoff Record:</span> <strong id="owner-playoff-record"></strong></div>
+                        <div class="stat-row"><span>Playoff PF / PA:</span> <strong id="owner-playoff-points"></strong></div>
+                        <div class="stat-row"><span>Playoff Avg Margin:</span> <strong id="owner-playoff-margin"></strong></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        </main>
+    </div>
+
+    <script src="data.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>
