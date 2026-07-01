@@ -13,6 +13,7 @@ LEAGUE_ID = os.getenv("LEAGUE_ID", "121269")
 SEASON = os.getenv("SEASON", "2026")
 ESPN_S2 = os.getenv("ESPN_S2")
 SWID = os.getenv("SWID")
+TEST_WEEK = os.getenv("TEST_WEEK")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
@@ -23,7 +24,9 @@ SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 RECIPIENT_EMAILS = os.getenv("RECIPIENT_EMAILS", "")
 
 def get_espn_data():
-    url = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{SEASON}/segments/0/leagues/{LEAGUE_ID}?view=mMatchupScore&view=mTeam&view=mRoster&view=mSettings"
+    url = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{SEASON}/segments/0/leagues/{LEAGUE_ID}?view=mMatchupScore&view=mTeam&view=mRoster&view=mSettings&view=mMatchup"
+    if TEST_WEEK:
+        url += f"&scoringPeriodId={TEST_WEEK}"
     headers = {}
     cookies = {}
     if ESPN_S2:
@@ -36,27 +39,56 @@ def get_espn_data():
         raise Exception(f"Error fetching data from ESPN: {response.status_code}\nResponse: {response.text}")
     return response.json()
 
+def get_optimal_score(roster_entries, slot_limits):
+    players = []
+    for entry in roster_entries:
+        player_info = entry.get('playerPoolEntry', {})
+        points = player_info.get('appliedStatTotal', 0)
+        eligible_slots = player_info.get('player', {}).get('eligibleSlots', [])
+        players.append({'points': points, 'slots': eligible_slots, 'name': player_info.get('player', {}).get('fullName')})
+    
+    players.sort(key=lambda x: x['points'], reverse=True)
+    
+    filled_slots = {}
+    active_slots = {}
+    for slot_id_str, limit in slot_limits.items():
+        slot_id = int(slot_id_str)
+        if slot_id not in [20, 21, 24] and limit > 0:
+            active_slots[slot_id] = limit
+            filled_slots[slot_id] = 0
+            
+    total_score = 0
+    for p in players:
+        sorted_slots = sorted(p['slots'], key=lambda s: (s >= 20, s)) 
+        for slot in sorted_slots:
+            if slot in active_slots and filled_slots[slot] < active_slots[slot]:
+                filled_slots[slot] += 1
+                total_score += p['points']
+                break
+    return total_score
+
 def process_data(data):
     # Determine the week that just finished
-    # ESPN scoringPeriodId is usually the current/upcoming week
-    scoring_period = data.get('scoringPeriodId', 1)
-    matchup_period = scoring_period - 1
-    
-    if matchup_period < 1:
-        matchup_period = 1 # Edge case
+    if TEST_WEEK:
+        matchup_period = int(TEST_WEEK)
+    else:
+        # ESPN scoringPeriodId is usually the current/upcoming week
+        scoring_period = data.get('scoringPeriodId', 1)
+        matchup_period = scoring_period - 1
+        
+        if matchup_period < 1:
+            matchup_period = 1 # Edge case
 
     # Extract teams
     teams = {}
     for team in data.get('teams', []):
-        team_id = team['id']
-        name = f"{team.get('location', '')} {team.get('nickname', '')}".strip()
-        record = team.get('record', {}).get('overall', {})
-        teams[team_id] = {
-            'name': name,
-            'wins': record.get('wins', 0),
-            'losses': record.get('losses', 0),
-            'ties': record.get('ties', 0),
-            'points_for': record.get('pointsFor', 0.0),
+        teams[team['id']] = {
+            'name': team.get('name', team.get('location', 'Unknown') + ' ' + team.get('nickname', '')).strip(),
+            'wins': team.get('record', {}).get('overall', {}).get('wins', 0),
+            'losses': team.get('record', {}).get('overall', {}).get('losses', 0),
+            'ties': team.get('record', {}).get('overall', {}).get('ties', 0),
+            'points_for': team.get('record', {}).get('overall', {}).get('pointsFor', 0),
+            'roster': team.get('roster', {})
         }
 
     # Process matchups for the selected week
@@ -65,6 +97,15 @@ def process_data(data):
     high_scorer_team = "None"
     top_player = "None"
     top_player_score = 0
+    
+    biggest_margin = -1
+    biggest_winner = "None"
+    closest_margin = float('inf')
+    closest_winner = "None"
+    best_waiver_player = "None"
+    best_waiver_score = 0
+    
+    slot_limits = data.get('settings', {}).get('rosterSettings', {}).get('lineupSlotCounts', {})
     
     for game in data.get('schedule', []):
         if game.get('matchupPeriodId') == matchup_period:
@@ -93,22 +134,44 @@ def process_data(data):
             else:
                 winner = 'Tie'
                 
+            margin = abs(home_score - away_score)
+            if margin > biggest_margin:
+                biggest_margin = margin
+                biggest_winner = winner if winner != 'Tie' else "Tie"
+            if margin < closest_margin:
+                closest_margin = margin
+                closest_winner = winner if winner != 'Tie' else "Tie"
+                
+            home_roster = teams.get(home_team_id, {}).get('roster', {}).get('entries', [])
+            away_roster = teams.get(away_team_id, {}).get('roster', {}).get('entries', [])
+            
+            home_optimal = get_optimal_score(home_roster, slot_limits)
+            away_optimal = get_optimal_score(away_roster, slot_limits)
+                
             matchups.append({
                 'home_team': teams.get(home_team_id, {}).get('name', 'Unknown'),
                 'home_score': home_score,
+                'home_optimal': home_optimal,
                 'away_team': teams.get(away_team_id, {}).get('name', 'Unknown'),
                 'away_score': away_score,
+                'away_optimal': away_optimal,
                 'winner': winner
             })
             
-            # Find the top player
-            for side in [home, away]:
-                roster = side.get('rosterForMatchupPeriod', {}).get('entries', [])
-                for entry in roster:
-                    # Slot 20 is Bench, 21 is IR. We only care about starters.
-                    if entry.get('lineupSlotId') not in [20, 21]:
-                        player_name = entry.get('playerPoolEntry', {}).get('player', {}).get('fullName', 'Unknown')
-                        points = entry.get('playerPoolEntry', {}).get('appliedStatTotal', 0)
+            # Find the top player and best waiver
+            for side_roster in [home_roster, away_roster]:
+                for entry in side_roster:
+                    player_name = entry.get('playerPoolEntry', {}).get('player', {}).get('fullName', 'Unknown')
+                    points = entry.get('playerPoolEntry', {}).get('appliedStatTotal', 0)
+                    acq_type = entry.get('acquisitionType')
+                    
+                    if acq_type in ['WAIVER', 'FREEAGENT']:
+                        if points > best_waiver_score:
+                            best_waiver_score = points
+                            best_waiver_player = player_name
+                            
+                    # Slot 20 is Bench, 21 is IR. We only care about starters for Top Player.
+                    if entry.get('lineupSlotId') not in [20, 21, 24]:
                         if points > top_player_score:
                             top_player_score = points
                             top_player = player_name
@@ -123,7 +186,13 @@ def process_data(data):
         'high_scorer_team': high_scorer_team,
         'high_score': week_high_score,
         'top_player': top_player,
-        'top_player_score': top_player_score
+        'top_player_score': top_player_score,
+        'biggest_winner': biggest_winner,
+        'biggest_margin': biggest_margin,
+        'closest_winner': closest_winner,
+        'closest_margin': closest_margin,
+        'best_waiver_player': best_waiver_player,
+        'best_waiver_score': best_waiver_score
     }
 
 def generate_summary_with_ai(stats):
@@ -151,7 +220,7 @@ def generate_summary_with_ai(stats):
     """
     
     try:
-        model = genai.GenerativeModel('gemini-1.5-pro')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         response = model.generate_content(prompt)
         text = response.text
         if text.startswith("```html"):
@@ -166,20 +235,89 @@ def generate_summary_with_ai(stats):
         return "<p><em>Error generating AI summary.</em></p>"
 
 def build_email_html(stats, ai_html):
+    scoreboard_html = f"""
+        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+            <h2 style="margin-top: 0; color: #1a5f7a;">🏈 Week {stats['week']} Scoreboard 🏈</h2>
+            <ul style="list-style-type: none; padding-left: 0; margin-bottom: 0;">
+    """
+    for m in stats['matchups']:
+        home_bold = "<strong>" if m['winner'] == m['home_team'] else ""
+        home_end = "</strong>" if m['winner'] == m['home_team'] else ""
+        away_bold = "<strong>" if m['winner'] == m['away_team'] else ""
+        away_end = "</strong>" if m['winner'] == m['away_team'] else ""
+        
+        # Only show optimal if it would have changed a loss/tie to a win
+        home_opt_str = f" | Opt: {m['home_optimal']:.2f}" if m['home_optimal'] > m['away_score'] and m['home_score'] <= m['away_score'] else ""
+        away_opt_str = f" | Opt: {m['away_optimal']:.2f}" if m['away_optimal'] > m['home_score'] and m['away_score'] <= m['home_score'] else ""
+        
+        scoreboard_html += f"""
+                <li style="margin-bottom: 10px; border-bottom: 1px solid #dee2e6; padding-bottom: 10px;">
+                    {away_bold}{m['away_team']}{away_end} ({m['away_score']:.2f} pts{away_opt_str}) 
+                    <br>vs<br> 
+                    {home_bold}{m['home_team']}{home_end} ({m['home_score']:.2f} pts{home_opt_str})
+                </li>
+        """
+    scoreboard_html += """
+            </ul>
+        </div>
+    """
+
+    waiver_text = f"{stats['best_waiver_player']} ({stats['best_waiver_score']:.2f} pts)" if stats['best_waiver_score'] > 0 else "None (No recent transaction data)"
+
+    changed_matchups = []
+    for m in stats['matchups']:
+        actual_winner = "Home" if m['home_score'] > m['away_score'] else ("Away" if m['away_score'] > m['home_score'] else "Tie")
+        optimal_winner = "Home" if m['home_optimal'] > m['away_optimal'] else ("Away" if m['away_optimal'] > m['home_optimal'] else "Tie")
+        
+        if actual_winner != optimal_winner:
+            winner_team = m['home_team'] if optimal_winner == "Home" else (m['away_team'] if optimal_winner == "Away" else "Tie")
+            loser_team = m['away_team'] if optimal_winner == "Home" else (m['home_team'] if optimal_winner == "Away" else "Tie")
+            winner_score = m['home_optimal'] if optimal_winner == "Home" else m['away_optimal']
+            loser_score = m['away_optimal'] if optimal_winner == "Home" else m['home_optimal']
+            
+            if optimal_winner != "Tie":
+                changed_matchups.append(f"<li style='margin-bottom: 5px;'><strong>{winner_team}</strong> would have beaten {loser_team} (<strong>{winner_score:.2f}</strong> to {loser_score:.2f})</li>")
+            else:
+                changed_matchups.append(f"<li style='margin-bottom: 5px;'><strong>{winner_team}</strong> and {loser_team} would have tied ({winner_score:.2f} to {loser_score:.2f})</li>")
+
+    if changed_matchups:
+        optimal_html = f"""
+        <div style="background-color: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #ffc107;">
+            <h2 style="margin-top: 0; color: #856404; font-size: 18px;">🤔 Would any matchups be different if each team set their optimal lineup? 🤔</h2>
+            <ul style="margin-bottom: 0;">
+                {''.join(changed_matchups)}
+            </ul>
+        </div>
+        """
+    else:
+        optimal_html = f"""
+        <div style="background-color: #fff3cd; padding: 15px; border-radius: 8px; margin-bottom: 20px; border-left: 5px solid #ffc107;">
+            <h2 style="margin-top: 0; color: #856404; font-size: 18px;">🤔 Would any matchups be different if each team set their optimal lineup? 🤔</h2>
+            <p style="margin-bottom: 0; color: #856404;">Not this week!</p>
+        </div>
+        """
+
     html = f"""
     <html>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px;">
         <h1 style="color: #1a5f7a; text-align: center;">Fantasy Football Recap: Week {stats['week']}</h1>
         
+        {scoreboard_html}
+        
         <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
             <h2 style="margin-top: 0; color: #d32f2f;">🌟 Weekly Superlatives 🌟</h2>
             <p><strong>Team of the Week:</strong> {stats['high_scorer_team']} ({stats['high_score']:.2f} pts)</p>
             <p><strong>Player of the Week:</strong> {stats['top_player']} ({stats['top_player_score']:.2f} pts)</p>
+            <p><strong>Biggest Winner:</strong> {stats['biggest_winner']} (Won by {stats['biggest_margin']:.2f} pts)</p>
+            <p><strong>Closest Nail-biter:</strong> {stats['closest_winner']} (Won by {stats['closest_margin']:.2f} pts)</p>
+            <p><strong>Best Waiver Wire Pickup:</strong> {waiver_text}</p>
         </div>
 
         <div style="margin-bottom: 30px;">
             {ai_html}
         </div>
+        
+        {optimal_html}
         
         <div style="background-color: #e9ecef; padding: 20px; border-radius: 8px;">
             <h2 style="margin-top: 0; color: #1a5f7a;">🏆 Current Standings 🏆</h2>

@@ -21,6 +21,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </head>
 
 <body>
@@ -34,30 +35,35 @@
             <div class="logo-area">
                 <span class="icon">🏈</span>
                 <div>
-                    <h1>ESPN Fantasy History</h1>
-                    <p class="subtitle">League <span id="league-id-display">121269</span> • Since <span
-                            id="start-year-display">...</span></p>
+                    <h1>Downriver Fantasy Football Companion App</h1>
                 </div>
             </div>
         </div>
     </header>
 
     <div class="app-layout container">
-        <aside class="sidebar card">
-            <h2 class="sidebar-title">Team Owners</h2>
-            <ul id="owner-list" class="owner-list">
-                <!-- Owners injected here -->
-            </ul>
+        <aside class="sidebar card" style="display: flex; flex-direction: column; gap: 1.5rem; padding: 1.5rem;">
+            <nav class="tabs vertical-tabs" style="display: flex; flex-direction: column; gap: 0.5rem; border: none; margin: 0; padding: 0; overflow: visible;">
+                <button class="tab-btn active" data-tab="records" style="text-align: left; padding: 0.75rem 1rem;">Records & History</button>
+                <button class="tab-btn" data-tab="current-season" style="text-align: left; padding: 0.75rem 1rem;">Current Season</button>
+                <button class="tab-btn" data-tab="all-time-records" style="text-align: left; padding: 0.75rem 1rem;">All Time Records</button>
+                <button class="tab-btn" data-tab="h2h" style="text-align: left; padding: 0.75rem 1rem;">Head-to-Head</button>
+                <button class="tab-btn" data-tab="champions" style="text-align: left; padding: 0.75rem 1rem;">Championships</button>
+            </nav>
+
+            <div style="border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
+                <button id="owners-toggle" style="width: 100%; display: flex; justify-content: space-between; align-items: center; background: none; border: none; color: var(--text-secondary); font-size: 1rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; cursor: pointer; padding-bottom: 0.5rem;">
+                    Team Owners <span id="owners-toggle-icon" style="font-size: 1.25rem;">+</span>
+                </button>
+                <div id="owners-content" style="display: none; padding-top: 0.5rem;">
+                    <ul id="owner-list" class="owner-list">
+                        <!-- Owners injected here -->
+                    </ul>
+                </div>
+            </div>
         </aside>
 
         <main class="main-content">
-        <nav class="tabs">
-            <button class="tab-btn active" data-tab="records">Records & History</button>
-            <button class="tab-btn" data-tab="current-season">Current Season</button>
-            <button class="tab-btn" data-tab="all-time-records">All Time Records</button>
-            <button class="tab-btn" data-tab="h2h">Head-to-Head</button>
-            <button class="tab-btn" data-tab="champions">Championships</button>
-        </nav>
 
         <section id="records" class="tab-content active">
             <div class="controls">
@@ -131,16 +137,31 @@
         </section>
 
         <section id="current-season" class="tab-content">
-            <div class="controls" style="justify-content: center; margin-top: 1rem;">
-                <label for="current-owner-select" style="font-weight: 600; font-size: 1.1rem;">Select Owner:</label>
-                <select id="current-owner-select" class="dropdown" style="font-size: 1.1rem; padding: 0.5rem 1.5rem;">
-                    <option value="" disabled selected>-- Select an Owner --</option>
-                    <!-- Teams injected here -->
-                </select>
+            <div class="card">
+                <div class="table-responsive">
+                    <table class="data-table" id="current-season-table">
+                        <thead>
+                            <tr>
+                                <th>Rank</th>
+                                <th>Team</th>
+                                <th class="sortable" data-sort="w">Record</th>
+                                <th class="sortable" data-sort="pf">PF</th>
+                                <th class="sortable" data-sort="pa">PA</th>
+                                <th class="sortable" data-sort="optW">Opt Record</th>
+                                <th class="sortable" data-sort="streak">Streak</th>
+                            </tr>
+                        </thead>
+                        <tbody id="current-season-body">
+                            <!-- Data injected here -->
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <div class="card" style="padding: 4rem 2rem; text-align: center; margin-top: 1rem;">
-                <h2 style="color: var(--warning); font-size: 2rem; margin-bottom: 0.5rem;">Coming Soon...</h2>
-                <p style="color: var(--text-secondary);">The Live Current Season dashboard is actively under construction and will be here shortly.</p>
+            <div class="card" style="margin-top: 2rem; max-width: 800px; margin-left: auto; margin-right: auto; padding: 1.5rem;">
+                <h3 class="section-title" style="text-align: center; margin-bottom: 1rem;">Points Scored By Week</h3>
+                <div style="position: relative; height: 300px; width: 100%;">
+                    <canvas id="current-season-chart"></canvas>
+                </div>
             </div>
         </section>
 

@@ -16,6 +16,8 @@ let highestSeasonPoints = [];
 
 let currentSortColumn = 'winPct';
 let currentSortDirection = 'desc';
+let csSortColumn = 'w';
+let csSortDirection = 'desc';
 
 // --- DOM ELEMENTS ---
 const loadingOverlay = document.getElementById('loading-overlay');
@@ -24,7 +26,9 @@ const yearSelect = document.getElementById('year-select');
 const startYearDisplay = document.getElementById('start-year-display');
 const team1Select = document.getElementById('team1-select');
 const team2Select = document.getElementById('team2-select');
-const currentOwnerSelect = document.getElementById('current-owner-select');
+const currentSeasonBody = document.getElementById('current-season-body');
+const currentSeasonChartCanvas = document.getElementById('current-season-chart');
+let currentSeasonChart = null;
 const h2hResults = document.getElementById('h2h-results');
 const championsGrid = document.getElementById('champions-grid');
 const tabButtons = document.querySelectorAll('.tab-btn');
@@ -37,7 +41,9 @@ const ownerProfileName = document.getElementById('owner-profile-name');
 function initApp() {
     const availableYears = Object.keys(localLeagueData).sort();
     const START_YEAR = availableYears.length > 0 ? availableYears[0] : 2024;
-    startYearDisplay.textContent = START_YEAR;
+    if (startYearDisplay) {
+        startYearDisplay.textContent = START_YEAR;
+    }
 
     try {
         // Map native object to expected leagueData structure
@@ -83,6 +89,23 @@ tabButtons.forEach(btn => {
         document.getElementById(btn.dataset.tab).classList.add('active');
     });
 });
+
+// --- SIDEBAR TOGGLE LOGIC ---
+const ownersToggle = document.getElementById('owners-toggle');
+const ownersContent = document.getElementById('owners-content');
+const ownersToggleIcon = document.getElementById('owners-toggle-icon');
+
+if (ownersToggle && ownersContent && ownersToggleIcon) {
+    ownersToggle.addEventListener('click', () => {
+        if (ownersContent.style.display === 'none') {
+            ownersContent.style.display = 'block';
+            ownersToggleIcon.textContent = '−';
+        } else {
+            ownersContent.style.display = 'none';
+            ownersToggleIcon.textContent = '+';
+        }
+    });
+}
 
 // --- SIDEBAR & ROUTING ---
 function renderSidebar() {
@@ -435,29 +458,6 @@ function populateUI() {
         team2Select.appendChild(opt2);
     });
 
-    if (currentOwnerSelect) {
-        let currentOwnersArray = [];
-        const mostRecentYear = validYears[0];
-        const currentData = leagueData[mostRecentYear];
-        
-        if (currentData && currentData.teams) {
-            currentData.teams.forEach(t => {
-                const standardizedTeam = allTeams.get(t.franchiseId);
-                if (standardizedTeam) currentOwnersArray.push(standardizedTeam);
-            });
-            
-            // Sort standardly
-            currentOwnersArray.sort((a, b) => a.displayName.localeCompare(b.displayName));
-            
-            currentOwnersArray.forEach(team => {
-                const opt3 = document.createElement('option');
-                opt3.value = team.id;
-                opt3.textContent = team.displayName;
-                currentOwnerSelect.appendChild(opt3);
-            });
-        }
-    }
-
     // Set team 2 to second option if exists
     if (teamArray.length > 1) {
         team2Select.value = teamArray[1].id;
@@ -469,6 +469,7 @@ function populateUI() {
     renderH2H();
     renderChampions();
     renderAllTimeRecords();
+    renderCurrentSeason();
 
     // 3. Listeners
     yearSelect.addEventListener('change', (e) => renderRecords(e.target.value));
@@ -670,19 +671,36 @@ function setupSortListeners() {
                 currentSortColumn = column;
                 currentSortDirection = 'desc';
             }
-            updateSortHeaders();
+            updateSortHeaders('#records-table', currentSortColumn, currentSortDirection);
             renderRecords(document.getElementById('year-select').value);
         });
     });
-    updateSortHeaders();
+    updateSortHeaders('#records-table', currentSortColumn, currentSortDirection);
+
+    document.querySelectorAll('#current-season-table th.sortable').forEach(th => {
+        th.style.cursor = 'pointer';
+        th.title = 'Click to sort';
+        th.addEventListener('click', () => {
+            const column = th.dataset.sort;
+            if (csSortColumn === column) {
+                csSortDirection = csSortDirection === 'desc' ? 'asc' : 'desc';
+            } else {
+                csSortColumn = column;
+                csSortDirection = 'desc';
+            }
+            updateSortHeaders('#current-season-table', csSortColumn, csSortDirection);
+            renderCurrentSeason();
+        });
+    });
+    updateSortHeaders('#current-season-table', csSortColumn, csSortDirection);
 }
 
-function updateSortHeaders() {
-    document.querySelectorAll('#records-table th.sortable').forEach(th => {
-        const isActive = th.dataset.sort === currentSortColumn;
+function updateSortHeaders(tableSelector, activeCol, activeDir) {
+    document.querySelectorAll(`${tableSelector} th.sortable`).forEach(th => {
+        const isActive = th.dataset.sort === activeCol;
         let indicator = '';
         if (isActive) {
-            indicator = currentSortDirection === 'desc' ? ' ▼' : ' ▲';
+            indicator = activeDir === 'desc' ? ' ▼' : ' ▲';
         }
         th.textContent = th.textContent.replace(/ [▼▲]/g, '') + indicator;
     });
@@ -802,6 +820,185 @@ function renderAllTimeRecords() {
     `;
     
     container.innerHTML = html;
+}
+
+// CURRENT SEASON RENDER
+function renderCurrentSeason() {
+    if (!currentSeasonBody) return;
+    currentSeasonBody.innerHTML = '';
+    
+    const validYears = Object.keys(leagueData).sort().reverse();
+    const currentYear = validYears[0];
+    const data = leagueData[currentYear];
+    if (!data || !data.teams) return;
+
+    let teamStats = {};
+    let chartData = {
+        labels: [],
+        datasets: []
+    };
+
+    data.teams.forEach(t => {
+        teamStats[t.id] = {
+            id: t.id,
+            teamId: t.franchiseId,
+            w: 0, l: 0, t: 0, pf: 0, pa: 0,
+            optW: 0, optL: 0, optT: 0,
+            streak: 0,
+            pointsByWeek: [],
+            rank: t.rankCalculatedFinal
+        };
+    });
+
+    const maxWeek = data.status?.latestScoringPeriod || 14;
+    for (let i = 1; i <= maxWeek; i++) {
+        chartData.labels.push(`Week ${i}`);
+    }
+
+    if (data.schedule) {
+        data.schedule.forEach(matchup => {
+            if (matchup.playoffTierType !== "NONE") return; 
+            if (matchup.winner === "UNDECIDED") return; 
+
+            const home = matchup.home;
+            const away = matchup.away;
+            if (!home || !away) return;
+            
+            const homeId = home.teamId;
+            const awayId = away.teamId;
+            const week = matchup.matchupPeriodId;
+            
+            const homePoints = home.totalPoints;
+            const awayPoints = away.totalPoints;
+            
+            if (homePoints > awayPoints) {
+                teamStats[homeId].w++; teamStats[awayId].l++;
+                teamStats[homeId].streak = teamStats[homeId].streak > 0 ? teamStats[homeId].streak + 1 : 1;
+                teamStats[awayId].streak = teamStats[awayId].streak < 0 ? teamStats[awayId].streak - 1 : -1;
+            } else if (awayPoints > homePoints) {
+                teamStats[awayId].w++; teamStats[homeId].l++;
+                teamStats[awayId].streak = teamStats[awayId].streak > 0 ? teamStats[awayId].streak + 1 : 1;
+                teamStats[homeId].streak = teamStats[homeId].streak < 0 ? teamStats[homeId].streak - 1 : -1;
+            } else {
+                teamStats[homeId].t++; teamStats[awayId].t++;
+                teamStats[homeId].streak = 0; teamStats[awayId].streak = 0;
+            }
+            
+            teamStats[homeId].pf += homePoints;
+            teamStats[homeId].pa += awayPoints;
+            teamStats[awayId].pf += awayPoints;
+            teamStats[awayId].pa += homePoints;
+            
+            teamStats[homeId].pointsByWeek[week - 1] = homePoints;
+            teamStats[awayId].pointsByWeek[week - 1] = awayPoints;
+            
+            let homeOpt = homePoints;
+            let awayOpt = awayPoints;
+            if (typeof currentSeasonOptimal !== 'undefined' && currentSeasonOptimal[week]) {
+                if (currentSeasonOptimal[week][homeId] !== undefined) homeOpt = currentSeasonOptimal[week][homeId];
+                if (currentSeasonOptimal[week][awayId] !== undefined) awayOpt = currentSeasonOptimal[week][awayId];
+            }
+            
+            if (homeOpt > awayOpt) {
+                teamStats[homeId].optW++; teamStats[awayId].optL++;
+            } else if (awayOpt > homeOpt) {
+                teamStats[awayId].optW++; teamStats[homeId].optL++;
+            } else {
+                teamStats[homeId].optT++; teamStats[awayId].optT++;
+            }
+        });
+    }
+
+    let sortedTeams = Object.values(teamStats).sort((a, b) => {
+        let valA = a[csSortColumn];
+        let valB = b[csSortColumn];
+        
+        let comparison = 0;
+        if (valA > valB) comparison = 1;
+        else if (valA < valB) comparison = -1;
+        else {
+            if (csSortColumn === 'pf' || csSortColumn === 'pa') {
+                comparison = a.w > b.w ? 1 : (a.w < b.w ? -1 : 0);
+            } else {
+                comparison = a.pf > b.pf ? 1 : (a.pf < b.pf ? -1 : 0);
+            }
+        }
+        
+        return csSortDirection === 'desc' ? -comparison : comparison;
+    });
+
+    const colors = [
+        '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', 
+        '#E7E9ED', '#8AC926', '#1982C4', '#6A4C93', '#F15BB5', '#00F5D4'
+    ];
+
+    sortedTeams.forEach((stats, idx) => {
+        const team = allTeams.get(stats.teamId);
+        if (!team) return;
+
+        const streakStr = stats.streak > 0 ? `W${stats.streak}` : (stats.streak < 0 ? `L${Math.abs(stats.streak)}` : '-');
+        const streakColor = stats.streak > 0 ? '#28a745' : (stats.streak < 0 ? '#dc3545' : 'var(--text-secondary)');
+        
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>#${idx + 1}</td>
+            <td>
+                <div class="team-cell">
+                    <img src="${team.logo || 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/default-team-logo-500.png'}" class="team-logo" alt="logo" onerror="this.src='https://a.espncdn.com/combiner/i?img=/i/teamlogos/default-team-logo-500.png'">
+                    <span>${team.displayName}</span>
+                </div>
+            </td>
+            <td>${stats.w}-${stats.l}-${stats.t}</td>
+            <td>${stats.pf.toFixed(1)}</td>
+            <td>${stats.pa.toFixed(1)}</td>
+            <td>${stats.optW}-${stats.optL}-${stats.optT}</td>
+            <td><strong style="color: ${streakColor};">${streakStr}</strong></td>
+        `;
+        currentSeasonBody.appendChild(tr);
+
+        chartData.datasets.push({
+            label: team.displayName,
+            data: stats.pointsByWeek,
+            borderColor: colors[idx % colors.length],
+            backgroundColor: colors[idx % colors.length],
+            fill: false,
+            tension: 0.1
+        });
+    });
+
+    if (currentSeasonChartCanvas) {
+        if (currentSeasonChart) {
+            currentSeasonChart.destroy();
+        }
+        currentSeasonChart = new Chart(currentSeasonChartCanvas, {
+            type: 'line',
+            data: chartData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            color: '#e0e0e0',
+                            font: { family: 'Inter', size: 12 }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        ticks: { color: '#e0e0e0' },
+                        grid: { color: 'rgba(255,255,255,0.1)' }
+                    },
+                    y: {
+                        ticks: { color: '#e0e0e0' },
+                        grid: { color: 'rgba(255,255,255,0.1)' },
+                        title: { display: true, text: 'Points', color: '#e0e0e0' }
+                    }
+                }
+            }
+        });
+    }
 }
 
 // BOOT
