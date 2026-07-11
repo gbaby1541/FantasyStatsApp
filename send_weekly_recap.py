@@ -236,6 +236,9 @@ def generate_summary_with_ai(stats):
 
 def build_email_html(stats, ai_html):
     scoreboard_html = f"""
+        <div style="text-align: center; margin-bottom: 20px;">
+            <a href="https://gbaby1541.github.io/FantasyStatsApp/" style="display: inline-block; padding: 12px 24px; background-color: #238636; color: white; text-decoration: none; font-weight: bold; border-radius: 6px; font-size: 16px;">Click Here for the Fantasy companion app</a>
+        </div>
         <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
             <h2 style="margin-top: 0; color: #1a5f7a;">🏈 Week {stats['week']} Scoreboard 🏈</h2>
             <ul style="list-style-type: none; padding-left: 0; margin-bottom: 0;">
@@ -387,6 +390,10 @@ def main():
         
         print("Processing stats...")
         stats = process_data(raw_data)
+        
+        if not stats.get('matchups'):
+            print("No completed matchups found. The season hasn't started yet. Exiting gracefully.")
+            return
         
         print(f"Generating AI recap for Week {stats['week']}...")
         ai_html = generate_summary_with_ai(stats)
