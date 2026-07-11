@@ -22,6 +22,10 @@ SMTP_USERNAME = os.getenv("SMTP_USERNAME")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
 RECIPIENT_EMAILS = os.getenv("RECIPIENT_EMAILS", "")
+TEST_EMAIL = os.getenv("TEST_EMAIL")
+
+if TEST_EMAIL:
+    RECIPIENT_EMAILS = TEST_EMAIL
 
 def get_espn_data():
     url = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{SEASON}/segments/0/leagues/{LEAGUE_ID}?view=mMatchupScore&view=mTeam&view=mRoster&view=mSettings&view=mMatchup"
