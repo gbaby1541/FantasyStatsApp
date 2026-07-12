@@ -9,15 +9,19 @@ import google.generativeai as genai
 
 load_dotenv()
 
-LEAGUE_ID = os.getenv("LEAGUE_ID", "121269")
-SEASON = os.getenv("SEASON", "2026")
+def get_env_var(name, default_val):
+    val = os.getenv(name)
+    return val if val else default_val
+
+LEAGUE_ID = get_env_var("LEAGUE_ID", "121269")
+SEASON = get_env_var("SEASON", "2026")
 ESPN_S2 = os.getenv("ESPN_S2")
 SWID = os.getenv("SWID")
 TEST_WEEK = os.getenv("TEST_WEEK")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-SMTP_SERVER = os.getenv("SMTP_SERVER", "smtp.gmail.com")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+SMTP_SERVER = get_env_var("SMTP_SERVER", "smtp.gmail.com")
+SMTP_PORT = int(get_env_var("SMTP_PORT", 587))
 SMTP_USERNAME = os.getenv("SMTP_USERNAME")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 SENDER_EMAIL = os.getenv("SENDER_EMAIL")
