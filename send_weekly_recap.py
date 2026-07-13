@@ -15,6 +15,10 @@ def get_env_var(name, default_val):
 
 LEAGUE_ID = get_env_var("LEAGUE_ID", "121269")
 SEASON = get_env_var("SEASON", "2026")
+TEST_SEASON = os.getenv("TEST_SEASON")
+if TEST_SEASON:
+    SEASON = TEST_SEASON
+    
 ESPN_S2 = os.getenv("ESPN_S2")
 SWID = os.getenv("SWID")
 TEST_WEEK = os.getenv("TEST_WEEK")

@@ -10,6 +10,10 @@ on:
         description: 'Test Week (e.g. 14). Leave blank for current week.'
         required: false
         type: string
+      test_season:
+        description: 'Test Season (e.g. 2024). Leave blank for current season.'
+        required: false
+        type: string
       test_email:
         description: 'Test Email Override (e.g. garybalkus@gmail.com). Leave blank to send to all.'
         required: false
@@ -47,5 +51,6 @@ jobs:
         SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
         RECIPIENT_EMAILS: ${{ secrets.RECIPIENT_EMAILS }}
         TEST_WEEK: ${{ github.event.inputs.test_week }}
+        TEST_SEASON: ${{ github.event.inputs.test_season }}
         TEST_EMAIL: ${{ github.event.inputs.test_email }}
       run: python send_weekly_recap.py
