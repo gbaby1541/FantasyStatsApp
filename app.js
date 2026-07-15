@@ -562,7 +562,7 @@ function renderRecords(year) {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>#${index + 1}</td>
-            <td>
+            <td class="sticky-col">
                 <div class="team-cell">
                     <img src="${team.logo || 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/default-team-logo-500.png'}" class="team-logo" alt="logo" onerror="this.src='https://a.espncdn.com/combiner/i?img=/i/teamlogos/default-team-logo-500.png'">
                     <span>${team.displayName}</span>
@@ -833,10 +833,6 @@ function renderCurrentSeason() {
     if (!data || !data.teams) return;
 
     let teamStats = {};
-    let chartData = {
-        labels: [],
-        datasets: []
-    };
 
     data.teams.forEach(t => {
         teamStats[t.id] = {
@@ -845,15 +841,9 @@ function renderCurrentSeason() {
             w: 0, l: 0, t: 0, pf: 0, pa: 0,
             optW: 0, optL: 0, optT: 0,
             streak: 0,
-            pointsByWeek: [],
             rank: t.rankCalculatedFinal
         };
     });
-
-    const maxWeek = data.status?.latestScoringPeriod || 14;
-    for (let i = 1; i <= maxWeek; i++) {
-        chartData.labels.push(`Week ${i}`);
-    }
 
     if (data.schedule) {
         data.schedule.forEach(matchup => {
@@ -888,9 +878,6 @@ function renderCurrentSeason() {
             teamStats[homeId].pa += awayPoints;
             teamStats[awayId].pf += awayPoints;
             teamStats[awayId].pa += homePoints;
-            
-            teamStats[homeId].pointsByWeek[week - 1] = homePoints;
-            teamStats[awayId].pointsByWeek[week - 1] = awayPoints;
             
             let homeOpt = homePoints;
             let awayOpt = awayPoints;
@@ -927,11 +914,6 @@ function renderCurrentSeason() {
         return csSortDirection === 'desc' ? -comparison : comparison;
     });
 
-    const colors = [
-        '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40', 
-        '#E7E9ED', '#8AC926', '#1982C4', '#6A4C93', '#F15BB5', '#00F5D4'
-    ];
-
     sortedTeams.forEach((stats, idx) => {
         const team = allTeams.get(stats.teamId);
         if (!team) return;
@@ -942,7 +924,7 @@ function renderCurrentSeason() {
         const tr = document.createElement('tr');
         tr.innerHTML = `
             <td>#${idx + 1}</td>
-            <td>
+            <td class="sticky-col">
                 <div class="team-cell">
                     <img src="${team.logo || 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/default-team-logo-500.png'}" class="team-logo" alt="logo" onerror="this.src='https://a.espncdn.com/combiner/i?img=/i/teamlogos/default-team-logo-500.png'">
                     <span>${team.displayName}</span>
@@ -955,50 +937,7 @@ function renderCurrentSeason() {
             <td><strong style="color: ${streakColor};">${streakStr}</strong></td>
         `;
         currentSeasonBody.appendChild(tr);
-
-        chartData.datasets.push({
-            label: team.displayName,
-            data: stats.pointsByWeek,
-            borderColor: colors[idx % colors.length],
-            backgroundColor: colors[idx % colors.length],
-            fill: false,
-            tension: 0.1
-        });
     });
-
-    if (currentSeasonChartCanvas) {
-        if (currentSeasonChart) {
-            currentSeasonChart.destroy();
-        }
-        currentSeasonChart = new Chart(currentSeasonChartCanvas, {
-            type: 'line',
-            data: chartData,
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: {
-                        position: 'right',
-                        labels: {
-                            color: '#e0e0e0',
-                            font: { family: 'Inter', size: 12 }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        ticks: { color: '#e0e0e0' },
-                        grid: { color: 'rgba(255,255,255,0.1)' }
-                    },
-                    y: {
-                        ticks: { color: '#e0e0e0' },
-                        grid: { color: 'rgba(255,255,255,0.1)' },
-                        title: { display: true, text: 'Points', color: '#e0e0e0' }
-                    }
-                }
-            }
-        });
-    }
 }
 
 // BOOT

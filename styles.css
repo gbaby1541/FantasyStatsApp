@@ -177,7 +177,7 @@ main {
     cursor: pointer;
     border-radius: 6px;
     transition: all 0.2s ease;
-    white-space: nowrap;
+    white-space: normal;
 }
 
 .tab-btn:hover {
@@ -271,6 +271,18 @@ main {
 
 .data-table td {
     font-size: 0.875rem;
+}
+
+.sticky-col {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    background-color: var(--card-bg);
+}
+
+.data-table th.sticky-col {
+    z-index: 3;
+    background-color: #1c2128;
 }
 
 .team-cell {
