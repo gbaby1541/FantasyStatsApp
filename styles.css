@@ -408,6 +408,10 @@ main {
     border-color: var(--warning);
 }
 
+.main-content {
+    min-width: 0;
+}
+
 .champion-card::before {
     content: '🏆';
     position: absolute;
