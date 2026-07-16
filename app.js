@@ -857,7 +857,7 @@ function renderCurrentSeason() {
     currentSeasonBody.innerHTML = '';
     
     const validYears = Object.keys(leagueData).sort().reverse();
-    const currentYear = validYears[0];
+    const currentYear = "2025"; // MOCK: Simulate 2025 season
     const data = leagueData[currentYear];
     if (!data || !data.teams) return;
 
@@ -881,6 +881,9 @@ function renderCurrentSeason() {
         data.schedule.forEach(matchup => {
             if (matchup.playoffTierType !== "NONE") return; 
             if (matchup.winner === "UNDECIDED") return; 
+            
+            // MOCK: Simulate end of week 14
+            if (matchup.matchupPeriodId > 14) return;
 
             const home = matchup.home;
             const away = matchup.away;
