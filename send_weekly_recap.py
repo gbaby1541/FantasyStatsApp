@@ -79,6 +79,28 @@ def get_optimal_score(roster_entries, slot_limits):
                 break
     return total_score
 
+def get_roster_highlights(roster):
+    starters = []
+    bench = []
+    for entry in roster:
+        player_name = entry.get('playerPoolEntry', {}).get('player', {}).get('fullName', 'Unknown')
+        points = entry.get('playerPoolEntry', {}).get('appliedStatTotal', 0)
+        slot = entry.get('lineupSlotId')
+        
+        if slot not in [20, 21, 24]:
+            starters.append({"name": player_name, "points": points})
+        else:
+            bench.append({"name": player_name, "points": points})
+            
+    starters.sort(key=lambda x: x["points"], reverse=True)
+    bench.sort(key=lambda x: x["points"], reverse=True)
+    
+    return {
+        'top_starter': starters[0] if starters else None,
+        'worst_starter': starters[-1] if starters else None,
+        'top_bench': bench[0] if bench else None
+    }
+
 def process_data(data):
     # Determine the week that just finished
     if TEST_WEEK:
@@ -159,14 +181,21 @@ def process_data(data):
             
             home_optimal = get_optimal_score(home_roster, slot_limits)
             away_optimal = get_optimal_score(away_roster, slot_limits)
+            
+            home_highlights = get_roster_highlights(home_roster)
+            away_highlights = get_roster_highlights(away_roster)
                 
             matchups.append({
                 'home_team': teams.get(home_team_id, {}).get('name', 'Unknown'),
                 'home_score': home_score,
                 'home_optimal': home_optimal,
+                'home_top_player': home_highlights['top_starter'],
+                'home_disappointing_player': home_highlights['worst_starter'],
                 'away_team': teams.get(away_team_id, {}).get('name', 'Unknown'),
                 'away_score': away_score,
                 'away_optimal': away_optimal,
+                'away_top_player': away_highlights['top_starter'],
+                'away_disappointing_player': away_highlights['worst_starter'],
                 'winner': winner
             })
             
@@ -215,7 +244,9 @@ def generate_summary_with_ai(stats):
     genai.configure(api_key=GEMINI_API_KEY)
     
     prompt = f"""
-    You are a fantasy football commissioner writing a fun, engaging, and slightly competitive weekly recap email to your league.
+    You are a fantasy football commissioner writing a realistic, engaging, and competitive weekly recap email to your league.
+    Your tone should be like a real sports analyst mixed with a friendly commish—avoid sounding too "cartoon-y", cheesy, or over-the-top. Focus on real fantasy football dynamics.
+    
     It is currently Week {stats['week']} of the fantasy season.
     
     Here is the data for this week's matchups:
@@ -225,8 +256,14 @@ def generate_summary_with_ai(stats):
     The top scoring starting player in the league was {stats['top_player']} with {stats['top_player_score']} points.
     
     Please write:
-    1. A custom, fun introduction (1-2 paragraphs).
-    2. A short (2-3 sentences) witty and entertaining summary for EACH matchup, roasting the loser slightly or praising a close win.
+    1. A custom, realistic introduction (1-2 paragraphs) talking about the week as a whole.
+    2. A short (2-3 sentences) summary for EACH matchup. For each matchup, you MUST mention:
+       - The high scorer of the matchup (between both teams).
+       - A standout player who had a surprisingly good game (referencing the top players).
+       - A disappointing player who let their team down (referencing the disappointing players in the data).
+       - Any close matchups or late game comebacks if the scores are very close.
+    
+    Keep the summaries grounded and analytical but still fun. Roast the loser slightly if they got blown out, or praise a close win.
     
     Format the output as clean HTML (without markdown codeblock wrappers like ```html). Use <h2>, <h3>, <p>, and <strong> tags where appropriate. Do NOT include the current standings or the raw stats at the bottom, I will append those myself.
     """
