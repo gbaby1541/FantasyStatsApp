@@ -822,6 +822,35 @@ function renderAllTimeRecords() {
     container.innerHTML = html;
 }
 
+function calculatePowerPoints(teamsArray, valueExtractor) {
+    const sorted = [...teamsArray].sort((a, b) => valueExtractor(b) - valueExtractor(a));
+    const pointsMap = {};
+    let n = teamsArray.length;
+    
+    for (let i = 0; i < sorted.length; i++) {
+        if (i > 0 && valueExtractor(sorted[i]) === valueExtractor(sorted[i-1])) {
+            continue;
+        }
+        
+        let tieCount = 1;
+        while (i + tieCount < sorted.length && valueExtractor(sorted[i + tieCount]) === valueExtractor(sorted[i])) {
+            tieCount++;
+        }
+        
+        let totalPointsForGroup = 0;
+        for (let j = 0; j < tieCount; j++) {
+            totalPointsForGroup += (n - (i + j));
+        }
+        const pointsPerTeam = totalPointsForGroup / tieCount;
+        
+        for (let j = 0; j < tieCount; j++) {
+            pointsMap[sorted[i + j].id] = pointsPerTeam;
+        }
+    }
+    
+    return pointsMap;
+}
+
 // CURRENT SEASON RENDER
 function renderCurrentSeason() {
     if (!currentSeasonBody) return;
@@ -839,11 +868,14 @@ function renderCurrentSeason() {
             id: t.id,
             teamId: t.franchiseId,
             w: 0, l: 0, t: 0, pf: 0, pa: 0,
+            totalW: 0, totalL: 0, totalT: 0,
             optW: 0, optL: 0, optT: 0,
             streak: 0,
             rank: t.rankCalculatedFinal
         };
     });
+    
+    let weeklyScores = {};
 
     if (data.schedule) {
         data.schedule.forEach(matchup => {
@@ -879,6 +911,10 @@ function renderCurrentSeason() {
             teamStats[awayId].pf += awayPoints;
             teamStats[awayId].pa += homePoints;
             
+            if (!weeklyScores[week]) weeklyScores[week] = [];
+            weeklyScores[week].push({ id: homeId, score: homePoints });
+            weeklyScores[week].push({ id: awayId, score: awayPoints });
+            
             let homeOpt = homePoints;
             let awayOpt = awayPoints;
             if (typeof currentSeasonOptimal !== 'undefined' && currentSeasonOptimal[week]) {
@@ -892,6 +928,24 @@ function renderCurrentSeason() {
                 teamStats[awayId].optW++; teamStats[homeId].optL++;
             } else {
                 teamStats[homeId].optT++; teamStats[awayId].optT++;
+            }
+        });
+        
+        Object.keys(weeklyScores).forEach(week => {
+            const scores = weeklyScores[week];
+            for (let i = 0; i < scores.length; i++) {
+                for (let j = i + 1; j < scores.length; j++) {
+                    if (scores[i].score > scores[j].score) {
+                        teamStats[scores[i].id].totalW++;
+                        teamStats[scores[j].id].totalL++;
+                    } else if (scores[i].score < scores[j].score) {
+                        teamStats[scores[i].id].totalL++;
+                        teamStats[scores[j].id].totalW++;
+                    } else {
+                        teamStats[scores[i].id].totalT++;
+                        teamStats[scores[j].id].totalT++;
+                    }
+                }
             }
         });
     }
@@ -938,6 +992,56 @@ function renderCurrentSeason() {
         `;
         currentSeasonBody.appendChild(tr);
     });
+
+    // Render Power Rankings
+    const prBody = document.getElementById('power-rankings-body');
+    if (prBody) {
+        prBody.innerHTML = '';
+        const teamStatsArr = Object.values(teamStats);
+        
+        const recordPoints = calculatePowerPoints(teamStatsArr, t => t.w + (t.t * 0.5));
+        const totalRecordPoints = calculatePowerPoints(teamStatsArr, t => t.totalW + (t.totalT * 0.5));
+        const pointsForPoints = calculatePowerPoints(teamStatsArr, t => t.pf);
+        
+        const prData = teamStatsArr.map(t => {
+            const rPts = recordPoints[t.id] || 0;
+            const trPts = totalRecordPoints[t.id] || 0;
+            const pfPts = pointsForPoints[t.id] || 0;
+            const recStr = `${t.w}-${t.l}${t.t > 0 ? '-' + t.t : ''}`;
+            const trStr = `${t.totalW}-${t.totalL}${t.totalT > 0 ? '-' + t.totalT : ''}`;
+            const pfStr = t.pf.toFixed(1);
+            
+            return {
+                teamId: t.teamId,
+                rPts, trPts, pfPts,
+                totalPts: rPts + trPts + pfPts,
+                recStr, trStr, pfStr
+            };
+        });
+        
+        prData.sort((a, b) => b.totalPts - a.totalPts);
+        
+        prData.forEach((row, index) => {
+            const team = allTeams.get(row.teamId);
+            if (!team) return;
+            
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td>#${index + 1}</td>
+                <td class="sticky-col">
+                    <div class="team-cell">
+                        <img src="${team.logo || 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/default-team-logo-500.png'}" class="team-logo" alt="logo" onerror="this.src='https://a.espncdn.com/combiner/i?img=/i/teamlogos/default-team-logo-500.png'">
+                        <span>${team.displayName}</span>
+                    </div>
+                </td>
+                <td>${row.recStr} <span style="color:var(--text-secondary); font-size: 0.85rem;">(${row.rPts})</span></td>
+                <td>${row.trStr} <span style="color:var(--text-secondary); font-size: 0.85rem;">(${row.trPts})</span></td>
+                <td>${row.pfStr} <span style="color:var(--text-secondary); font-size: 0.85rem;">(${row.pfPts})</span></td>
+                <td><strong>${row.totalPts}</strong></td>
+            `;
+            prBody.appendChild(tr);
+        });
+    }
 }
 
 // BOOT
