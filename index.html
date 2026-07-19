@@ -20,7 +20,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=4">
+    <link rel="stylesheet" href="styles.css?v=5">
 </head>
 
 <body>
@@ -209,8 +209,27 @@
         </main>
     </div>
 
-    <script src="data.js?v=4"></script>
-    <script src="app.js?v=4"></script>
+    <!-- Welcome Modal -->
+    <div id="welcome-modal-overlay" class="welcome-modal-overlay">
+        <div class="welcome-modal">
+            <button id="welcome-modal-close" class="welcome-modal-close">&times;</button>
+            <h2 style="color: var(--warning); margin-bottom: 1rem;">Welcome!</h2>
+            <p style="margin-bottom: 1rem;">Welcome to the Downriver Fantasy Football companion site! This is meant to be viewed as just that, a companion to the ESPN main site. When you close this popup window, the following features are available on the website:</p>
+            
+            <ul style="margin-bottom: 1rem; padding-left: 1.5rem; display: flex; flex-direction: column; gap: 0.75rem;">
+                <li><strong>Current Season</strong> - Will show standings, points for/against, Optimal Record (what everyone's record would be if they set the best lineups), and win streak. Similar features can be found on the ESPN site.</li>
+                <li><strong>Records & History</strong> - This will show all-time statistics, as well as statistics from each season. It shows columns such as all-time win percentage, Playoff records, and championships.</li>
+                <li><strong>All Time Records</strong> - Since the inception of this league in 2011, it shows all-time records in various categories.</li>
+                <li><strong>Head-to-Head</strong> - You can find out any owner's record vs anyone all time with this tool!</li>
+                <li><strong>Championships</strong> - Exactly what it says.</li>
+            </ul>
+            
+            <p style="font-size: 0.85rem; color: var(--text-secondary); margin-top: 1.5rem;"><em>This site is viewable on all platforms (mobile, tablets, PCs, Macs etc). It is in no way affiliated with ESPN.</em></p>
+        </div>
+    </div>
+
+    <script src="data.js?v=5"></script>
+    <script src="app.js?v=5"></script>
 </body>
 
 </html>

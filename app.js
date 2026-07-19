@@ -58,9 +58,18 @@ function initApp() {
         populateUI();
         renderSidebar();
 
-        // Hide loading
+        // Hide loading and show modal
         setTimeout(() => {
             loadingOverlay.classList.add('hidden');
+            
+            // Show welcome modal if not shown this session
+            if (!sessionStorage.getItem('welcomeShown')) {
+                const welcomeOverlay = document.getElementById('welcome-modal-overlay');
+                if (welcomeOverlay) {
+                    welcomeOverlay.classList.add('active');
+                    sessionStorage.setItem('welcomeShown', 'true');
+                }
+            }
         }, 500);
 
     } catch (e) {
@@ -75,6 +84,25 @@ function initApp() {
         `;
     }
 }
+
+// --- MODAL LOGIC ---
+document.addEventListener('DOMContentLoaded', () => {
+    const welcomeOverlay = document.getElementById('welcome-modal-overlay');
+    const welcomeClose = document.getElementById('welcome-modal-close');
+    
+    if (welcomeClose && welcomeOverlay) {
+        welcomeClose.addEventListener('click', () => {
+            welcomeOverlay.classList.remove('active');
+        });
+        
+        // Also close if they click outside the modal box
+        welcomeOverlay.addEventListener('click', (e) => {
+            if (e.target === welcomeOverlay) {
+                welcomeOverlay.classList.remove('active');
+            }
+        });
+    }
+});
 
 // --- TAB SWITCHING LOGIC ---
 tabButtons.forEach(btn => {
