@@ -20,7 +20,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="styles.css?v=5">
+    <link rel="stylesheet" href="styles.css?v=6">
 </head>
 
 <body>
@@ -43,8 +43,8 @@
     <div class="app-layout container">
         <aside class="sidebar card" style="display: flex; flex-direction: column; gap: 1.5rem; padding: 1.5rem;">
             <nav class="tabs vertical-tabs" style="display: flex; flex-direction: column; gap: 0.5rem; border: none; margin: 0; padding: 0; overflow: visible;">
-                <button class="tab-btn active" data-tab="records" style="text-align: left; padding: 0.75rem 1rem;">Records & History</button>
-                <button class="tab-btn" data-tab="current-season" style="text-align: left; padding: 0.75rem 1rem;">Current Season</button>
+                <button class="tab-btn active" data-tab="current-season" style="text-align: left; padding: 0.75rem 1rem;">Current Season</button>
+                <button class="tab-btn" data-tab="records" style="text-align: left; padding: 0.75rem 1rem;">Records & History</button>
                 <button class="tab-btn" data-tab="all-time-records" style="text-align: left; padding: 0.75rem 1rem;">All Time Records</button>
                 <button class="tab-btn" data-tab="h2h" style="text-align: left; padding: 0.75rem 1rem;">Head-to-Head</button>
                 <button class="tab-btn" data-tab="champions" style="text-align: left; padding: 0.75rem 1rem;">Championships</button>
@@ -64,7 +64,7 @@
 
         <main class="main-content">
 
-        <section id="records" class="tab-content active">
+        <section id="records" class="tab-content">
             <div class="controls">
                 <label for="year-select">Select Year:</label>
                 <select id="year-select" class="dropdown">
@@ -135,7 +135,7 @@
             </div>
         </section>
 
-        <section id="current-season" class="tab-content">
+        <section id="current-season" class="tab-content active">
             <div class="card">
                 <div class="table-responsive">
                     <table class="data-table" id="current-season-table">
@@ -228,8 +228,8 @@
         </div>
     </div>
 
-    <script src="data.js?v=5"></script>
-    <script src="app.js?v=5"></script>
+    <script src="data.js?v=6"></script>
+    <script src="app.js?v=6"></script>
 </body>
 
 </html>
