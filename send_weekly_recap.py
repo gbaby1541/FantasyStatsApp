@@ -298,15 +298,11 @@ def build_email_html(stats, ai_html):
         away_bold = "<strong>" if m['winner'] == m['away_team'] else ""
         away_end = "</strong>" if m['winner'] == m['away_team'] else ""
         
-        # Only show optimal if it would have changed a loss/tie to a win
-        home_opt_str = f" | Opt: {m['home_optimal']:.2f}" if m['home_optimal'] > m['away_score'] and m['home_score'] <= m['away_score'] else ""
-        away_opt_str = f" | Opt: {m['away_optimal']:.2f}" if m['away_optimal'] > m['home_score'] and m['away_score'] <= m['home_score'] else ""
-        
         scoreboard_html += f"""
                 <li style="margin-bottom: 10px; border-bottom: 1px solid #dee2e6; padding-bottom: 10px;">
-                    {away_bold}{m['away_team']}{away_end} ({m['away_score']:.2f} pts{away_opt_str}) 
+                    {away_bold}{m['away_team']}{away_end} ({m['away_score']:.2f} pts) 
                     <br>vs<br> 
-                    {home_bold}{m['home_team']}{home_end} ({m['home_score']:.2f} pts{home_opt_str})
+                    {home_bold}{m['home_team']}{home_end} ({m['home_score']:.2f} pts)
                 </li>
         """
     scoreboard_html += """
