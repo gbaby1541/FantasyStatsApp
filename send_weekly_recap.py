@@ -436,8 +436,8 @@ def main():
         print("Processing stats...")
         stats = process_data(raw_data)
         
-        if not stats.get('matchups'):
-            print("No completed matchups found. The season hasn't started yet. Exiting gracefully.")
+        if not stats.get('matchups') or stats.get('high_score', 0) == 0:
+            print("No completed matchups found or all scores are 0. The season hasn't started yet. Exiting gracefully.")
             return
         
         print(f"Generating AI recap for Week {stats['week']}...")

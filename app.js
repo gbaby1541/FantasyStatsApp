@@ -938,7 +938,7 @@ function renderCurrentSeason() {
     currentSeasonBody.innerHTML = '';
     
     const validYears = Object.keys(leagueData).sort().reverse();
-    const currentYear = "2025"; // MOCK: Simulate 2025 season
+    const currentYear = "2026"; // MOCK: Simulate 2026 season
     const data = leagueData[currentYear];
     if (!data || !data.teams) return;
 
