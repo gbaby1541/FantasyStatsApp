@@ -9,10 +9,11 @@
         window.onerror = function(msg, src, line, col, err) {
             window.addEventListener('DOMContentLoaded', () => {
                 const overlay = document.getElementById('loading-overlay');
+                const safeMsg = String(msg).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
                 if (overlay) {
-                    overlay.innerHTML = `<div style="padding:2rem;color:red;"><h2>Crash:</h2><p>${msg}</p><p>Line: ${line}</p><pre>${err?.stack}</pre></div>`;
+                    overlay.innerHTML = `<div style="padding:2rem;color:red;"><h2>Crash:</h2><p>${safeMsg}</p><p>Line: ${line}</p><pre>${err?.stack}</pre></div>`;
                 } else {
-                    document.body.innerHTML += `<div style="position:fixed;top:0;left:0;background:black;color:red;z-index:99999;padding:2rem;"><h2>Crash:</h2><p>${msg}</p><p>Line: ${line}</p></div>`;
+                    document.body.innerHTML += `<div style="position:fixed;top:0;left:0;background:black;color:red;z-index:99999;padding:2rem;"><h2>Crash:</h2><p>${safeMsg}</p><p>Line: ${line}</p></div>`;
                 }
             });
         };

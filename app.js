@@ -14,6 +14,11 @@ let highestMargins = [];
 let regularSeasonWins = [];
 let highestSeasonPoints = [];
 
+function sanitize(str) {
+    if (typeof str !== 'string') return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
 let currentSortColumn = 'winPct';
 let currentSortDirection = 'desc';
 let csSortColumn = 'w';
@@ -317,7 +322,9 @@ function processAggregates() {
         // 0. Store/Update Member Profiles
         if (members) {
             members.forEach(member => {
-                allMembers.set(member.id, `${member.firstName} ${member.lastName}`.trim());
+                const safeFirst = sanitize(member.firstName);
+                const safeLast = sanitize(member.lastName);
+                allMembers.set(member.id, `${safeFirst} ${safeLast}`.trim());
             });
         }
 
@@ -344,12 +351,17 @@ function processAggregates() {
             team.franchiseId = franchiseId;
             yearFranchiseMap.set(team.id, franchiseId);
 
+            let safeLogo = team.logo || 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/default-team-logo-500.png';
+            if (safeLogo.includes('"') || safeLogo.includes('<') || safeLogo.includes('>')) {
+                safeLogo = 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/default-team-logo-500.png';
+            }
+
             allTeams.set(franchiseId, {
                 id: franchiseId,
                 name: ownerName,
                 displayName: displayName,
-                abbrev: team.abbrev,
-                logo: team.logo || 'https://a.espncdn.com/combiner/i?img=/i/teamlogos/default-team-logo-500.png',
+                abbrev: sanitize(team.abbrev),
+                logo: safeLogo,
                 owners: team.owners // Array of owner IDs
             });
 
