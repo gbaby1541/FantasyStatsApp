@@ -178,8 +178,13 @@ def process_data(data):
                 closest_margin = margin
                 closest_winner = winner if winner != 'Tie' else "Tie"
                 
-            home_roster = teams.get(home_team_id, {}).get('roster', {}).get('entries', [])
-            away_roster = teams.get(away_team_id, {}).get('roster', {}).get('entries', [])
+            home_roster = game.get('home', {}).get('rosterForCurrentScoringPeriod', {}).get('entries', [])
+            if not home_roster:
+                home_roster = game.get('home', {}).get('rosterForMatchupPeriod', {}).get('entries', [])
+            
+            away_roster = game.get('away', {}).get('rosterForCurrentScoringPeriod', {}).get('entries', [])
+            if not away_roster:
+                away_roster = game.get('away', {}).get('rosterForMatchupPeriod', {}).get('entries', [])
             
             home_optimal = get_optimal_score(home_roster, slot_limits)
             away_optimal = get_optimal_score(away_roster, slot_limits)
