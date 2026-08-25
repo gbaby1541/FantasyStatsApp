@@ -114,12 +114,22 @@ def process_data(data):
         if matchup_period < 1:
             matchup_period = 1 # Edge case
 
+    members = {m['id']: f"{m.get('firstName', '')} {m.get('lastName', '')}".strip() for m in data.get('members', [])}
+    
     # Extract teams
     teams = {}
     for team in data.get('teams', []):
-        raw_name = team.get('name', team.get('location', 'Unknown') + ' ' + team.get('nickname', '')).strip()
+        owner_id = team.get('owners', [None])[0] if team.get('owners') else None
+        owner_name = members.get(owner_id, 'Unknown')
+        lower_name = owner_name.lower()
+        if lower_name == "b a": owner_name = "Blair Adams"
+        if lower_name in ["t balkus", "tim balkus"]: owner_name = "Tim Balkus"
+        if lower_name in ["chuck hutson", "charles hutson"]: owner_name = "Charles Hutson"
+        
+        first_name = owner_name.split()[0] if owner_name != 'Unknown' else team.get('name', 'Unknown')
+        
         teams[team['id']] = {
-            'name': html.escape(raw_name),
+            'name': html.escape(first_name),
             'wins': team.get('record', {}).get('overall', {}).get('wins', 0),
             'losses': team.get('record', {}).get('overall', {}).get('losses', 0),
             'ties': team.get('record', {}).get('overall', {}).get('ties', 0),
