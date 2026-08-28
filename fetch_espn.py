@@ -18,8 +18,12 @@ ctx.verify_mode = ssl.CERT_NONE
 with open("data.js", "w") as f:
     f.write("const localLeagueData = {\n")
     
-    for idx, year in enumerate(range(2011, 2026)):
-        url = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/leagueHistory/{league_id}?seasonId={year}&view=mMatchupScore&view=mTeam"
+    for idx, year in enumerate(range(2011, 2027)):
+        if year < 2026:
+            url = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/leagueHistory/{league_id}?seasonId={year}&view=mMatchupScore&view=mTeam"
+        else:
+            url = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{year}/segments/0/leagues/{league_id}?view=mMatchupScore&view=mTeam"
+
         
         headers = {
             'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)',
@@ -44,7 +48,7 @@ with open("data.js", "w") as f:
                 payload = data[0] if isinstance(data, list) and len(data) > 0 else data
                 
                 f.write(f'"{year}": {json.dumps(payload)}')
-                if idx != 14:
+                if idx != 15:
                     f.write(",\n")
                 print(f"Success {year}")
         except urllib.error.HTTPError as e:
@@ -68,34 +72,34 @@ with open("data.js", "w") as f:
                             if "<html" in content.lower():
                                 print(f"Blocked by ESPN HTML page on {year}")
                                 f.write(f'"{year}": {{}}')
-                                if idx != 14:
+                                if idx != 15:
                                     f.write(",\n")
                                 continue
 
                             data = json.loads(content)
                             payload = data[0] if isinstance(data, list) and len(data) > 0 else data
                             f.write(f'"{year}": {json.dumps(payload)}')
-                            if idx != 14:
+                            if idx != 15:
                                 f.write(",\n")
                             print(f"Success on redirect {year}")
                     except Exception as re:
                         print(f"Redirect failed {year}:", re)
                         f.write(f'"{year}": {{}}')
-                        if idx != 14:
+                        if idx != 15:
                             f.write(",\n")
                 else:
                     f.write(f'"{year}": {{}}')
-                    if idx != 14:
+                    if idx != 15:
                         f.write(",\n")
             else:
                 print(f"HTTP Error {year}:", e.code)
                 f.write(f'"{year}": {{}}')
-                if idx != 14:
+                if idx != 15:
                     f.write(",\n")
         except Exception as e:
             print(f"Error {year}:", e)
             f.write(f'"{year}": {{}}')
-            if idx != 14:
+            if idx != 15:
                 f.write(",\n")
                 
     f.write("\n};\n")
@@ -129,11 +133,11 @@ def get_optimal_score(roster_entries, slot_limits):
                 break
     return total_score
 
-print("Fetching optimal scores for 2025...")
+print("Fetching optimal scores for 2026...")
 optimal_scores = {}
 try:
     # Get settings to find current week and slot limits
-    url_settings = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2025/segments/0/leagues/{league_id}?view=mSettings"
+    url_settings = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2026/segments/0/leagues/{league_id}?view=mSettings"
     req_settings = urllib.request.Request(url_settings, headers=headers)
     with urllib.request.urlopen(req_settings, context=ctx) as res:
         settings_data = json.loads(res.read().decode('utf-8'))
@@ -142,7 +146,7 @@ try:
 
     for week in range(1, current_week + 1):
         optimal_scores[week] = {}
-        url_roster = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2025/segments/0/leagues/{league_id}?view=mRoster&scoringPeriodId={week}"
+        url_roster = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2026/segments/0/leagues/{league_id}?view=mRoster&scoringPeriodId={week}"
         req_roster = urllib.request.Request(url_roster, headers=headers)
         with urllib.request.urlopen(req_roster, context=ctx) as res:
             roster_data = json.loads(res.read().decode('utf-8'))
