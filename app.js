@@ -375,9 +375,11 @@ function processAggregates() {
 
             // Identity Normalizations
             const lowerName = ownerName.toLowerCase();
-            if (lowerName === "b a") ownerName = "Blair Adams";
+            if (lowerName === "b a" || lowerName === "blair dams") ownerName = "Blair Adams";
             if (lowerName === "t balkus" || lowerName === "tim balkus") ownerName = "Tim Balkus";
             if (lowerName === "chuck hutson" || lowerName === "charles hutson") ownerName = "Charles Hutson";
+            if (lowerName === "dave hakalo") ownerName = "David Hakalo";
+            if (lowerName === "jack crane") ownerName = "Jack Crane";
 
             const franchiseId = ownerName !== 'Unknown' ? ownerName : `team-${team.id}`;
             const displayName = ownerName; // Per user request, strip team names entirely!
