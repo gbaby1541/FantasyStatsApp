@@ -221,14 +221,18 @@ def generate_summary_with_ai(stats):
     
     Please write:
     1. A custom, realistic introduction (1-2 paragraphs) hyping up the upcoming Week {stats['week']}.
-    2. A short (2-3 sentences) prediction and preview for EACH matchup. For each matchup, you MUST mention:
-       - Who you think will win, referencing analytical models, simulations, or strong reasoning.
-       - A key player matchup or storyline based on the key players listed.
-       - The historical H2H record provided.
+    2. A prediction and preview for EACH matchup. 
+    
+    CRITICAL FORMATTING INSTRUCTION: 
+    For each matchup, you MUST format it EXACTLY like this HTML template:
+    <h3>Away Team Name (Away Record) vs Home Team Name (Home Record)</h3>
+    <p>Your prediction and analysis here (2-3 sentences), referencing analytical models, a key player matchup, and your simulated pick for who will win.</p>
+    <p><em>All-Time: [Insert the exact all_time_h2h string provided in the JSON]</em></p>
+    <hr>
     
     Keep the predictions grounded and analytical but still fun. 
     
-    Format the output as clean HTML (without markdown codeblock wrappers like ```html). Use <h2>, <h3>, <p>, and <strong> tags where appropriate. Do NOT include any standings or raw stats at the bottom.
+    Format the output as clean HTML (without markdown codeblock wrappers like ```html). Use <h2>, <h3>, <p>, <em> and <strong> tags where appropriate. Do NOT include any standings or raw stats at the bottom.
     """
     
     try:
@@ -247,34 +251,14 @@ def generate_summary_with_ai(stats):
         return "<p><em>Error generating AI summary.</em></p>"
 
 def build_email_html(stats, ai_html):
-    scoreboard_html = f"""
-        <div style="text-align: center; margin-bottom: 20px;">
-            <a href="https://gbaby1541.github.io/FantasyStatsApp/" style="display: inline-block; padding: 12px 24px; background-color: #238636; color: white; text-decoration: none; font-weight: bold; border-radius: 6px; font-size: 16px;">Click Here for the Fantasy companion app</a>
-        </div>
-        <div style="background-color: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-            <h2 style="margin-top: 0; color: #1a5f7a;">🏈 Week {stats['week']} Matchups 🏈</h2>
-            <ul style="list-style-type: none; padding-left: 0; margin-bottom: 0;">
-    """
-    for m in stats['matchups']:
-        scoreboard_html += f"""
-                <li style="margin-bottom: 10px; border-bottom: 1px solid #dee2e6; padding-bottom: 10px; text-align: center; font-size: 1.1em;">
-                    <strong>{m['away_team']}</strong> ({m['away_record']})
-                    <br><span style="color: #777; font-size: 0.9em;">vs</span><br> 
-                    <strong>{m['home_team']}</strong> ({m['home_record']})
-                    <br><span style="color: #444; font-size: 0.85em; font-style: italic;">All-Time: {m['all_time_h2h']}</span>
-                </li>
-        """
-    scoreboard_html += """
-            </ul>
-        </div>
-    """
-
     html = f"""
     <html>
       <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 0 auto; padding: 20px;">
         <h1 style="color: #1a5f7a; text-align: center;">Fantasy Football Preview: Week {stats['week']}</h1>
         
-        {scoreboard_html}
+        <div style="text-align: center; margin-bottom: 20px;">
+            <a href="https://gbaby1541.github.io/FantasyStatsApp/" style="display: inline-block; padding: 12px 24px; background-color: #238636; color: white; text-decoration: none; font-weight: bold; border-radius: 6px; font-size: 16px;">Click Here for the Fantasy companion app</a>
+        </div>
         
         <div style="margin-bottom: 30px;">
             {ai_html}
