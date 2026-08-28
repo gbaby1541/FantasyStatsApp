@@ -358,7 +358,7 @@ function processAggregates() {
             members.forEach(member => {
                 const safeFirst = sanitize(member.firstName);
                 const safeLast = sanitize(member.lastName);
-                allMembers.set(member.id, `${safeFirst} ${safeLast}`.trim());
+                allMembers.set(member.id, `${safeFirst} ${safeLast}`.replace(/\s+/g, ' ').trim());
             });
         }
 
