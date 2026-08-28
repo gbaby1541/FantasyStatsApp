@@ -195,11 +195,11 @@ function renderSidebar() {
     
     const currentHeader = document.createElement('h3');
     currentHeader.textContent = "Current Owners";
-    currentHeader.style.cssText = "color: var(--text-secondary); font-size: 0.75rem; padding: 15px 15px 5px; margin: 0; text-transform: uppercase; letter-spacing: 0.05em;";
+    currentHeader.style.cssText = "color: var(--warning); font-size: 0.75rem; padding: 15px 15px 5px; margin: 0; text-transform: uppercase; letter-spacing: 0.05em;";
     
     const formerHeader = document.createElement('h3');
     formerHeader.textContent = "Former Owners";
-    formerHeader.style.cssText = "color: var(--text-secondary); font-size: 0.75rem; padding: 25px 15px 5px; margin: 0; text-transform: uppercase; letter-spacing: 0.05em;";
+    formerHeader.style.cssText = "color: var(--warning); font-size: 0.75rem; padding: 25px 15px 5px; margin: 0; text-transform: uppercase; letter-spacing: 0.05em;";
 
     const currentUl = document.createElement('ul');
     currentUl.className = 'owner-list';
