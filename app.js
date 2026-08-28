@@ -192,14 +192,48 @@ if (ownersToggle && ownersContent && ownersToggleIcon) {
 function renderSidebar() {
     if(!ownerList) return;
     ownerList.innerHTML = '';
+    
+    const currentHeader = document.createElement('h3');
+    currentHeader.textContent = "Current Owners";
+    currentHeader.style.cssText = "color: var(--text-secondary); font-size: 0.75rem; padding: 15px 15px 5px; margin: 0; text-transform: uppercase; letter-spacing: 0.05em;";
+    
+    const formerHeader = document.createElement('h3');
+    formerHeader.textContent = "Former Owners";
+    formerHeader.style.cssText = "color: var(--text-secondary); font-size: 0.75rem; padding: 25px 15px 5px; margin: 0; text-transform: uppercase; letter-spacing: 0.05em;";
+
+    const currentUl = document.createElement('ul');
+    currentUl.className = 'owner-list';
+    
+    const formerUl = document.createElement('ul');
+    formerUl.className = 'owner-list';
+
+    const currentNames = [
+        "al prysiazniuk", "blair adams", "dan brunette", "david hakalo", 
+        "gary balkus", "gregory gretch", "jack crane", "jamie itani", 
+        "justin bommer", "shawn bolton", "thomas pallisco", "tim balkus"
+    ];
+
     const teamArray = Array.from(allTeams.values()).sort((a, b) => a.displayName.localeCompare(b.displayName));
     
     teamArray.forEach(team => {
         const li = document.createElement('li');
         li.textContent = team.displayName;
         li.addEventListener('click', () => showOwnerPage(team.id, li));
-        ownerList.appendChild(li);
+        
+        let testName = team.displayName.toLowerCase();
+        if (testName === "blair dams" || testName === "b a") testName = "blair adams";
+        
+        if (currentNames.includes(testName)) {
+            currentUl.appendChild(li);
+        } else {
+            formerUl.appendChild(li);
+        }
     });
+
+    ownerList.appendChild(currentHeader);
+    ownerList.appendChild(currentUl);
+    ownerList.appendChild(formerHeader);
+    ownerList.appendChild(formerUl);
 }
 
 function showOwnerPage(teamId, clickedLi) {
@@ -228,7 +262,7 @@ function showOwnerPage(teamId, clickedLi) {
 
     // --- Current Season Data ---
     const sortedYears = Object.keys(leagueData).sort().reverse();
-    const currentYear = sortedYears[0];
+    const currentYear = "2026";
     const currentData = leagueData[currentYear];
     const currentYearSpan = document.getElementById('owner-current-year');
     if(currentYearSpan) currentYearSpan.textContent = currentYear;
