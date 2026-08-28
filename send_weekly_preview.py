@@ -163,12 +163,33 @@ def process_data(data):
                     if entry.get('lineupSlotId') not in [20, 21, 24]:
                         player_name = entry.get('playerPoolEntry', {}).get('player', {}).get('fullName', 'Unknown')
                         proj = entry.get('playerPoolEntry', {}).get('appliedStatTotal', 0)
+                        
+                        # Fallback to projection inside stats array if appliedStatTotal is 0
+                        if proj == 0:
+                            for stat in entry.get('playerPoolEntry', {}).get('player', {}).get('stats', []):
+                                if stat.get('statSourceId') == 1 and stat.get('scoringPeriodId') == matchup_period:
+                                    proj = stat.get('appliedTotal', 0)
+                                    break
+                                    
                         players.append({'name': player_name, 'proj': proj})
                 players.sort(key=lambda x: x['proj'], reverse=True)
                 return [p['name'] for p in players[:3]] # Top 3 players
+                
+            def get_projected_total(roster):
+                total = 0.0
+                for entry in roster:
+                    if entry.get('lineupSlotId') not in [20, 21, 24]:
+                        # Check stats array for projection
+                        for stat in entry.get('playerPoolEntry', {}).get('player', {}).get('stats', []):
+                            if stat.get('statSourceId') == 1 and stat.get('scoringPeriodId') == matchup_period:
+                                total += stat.get('appliedTotal', 0)
+                                break
+                return round(total, 2)
             
             home_stars = get_top_players(home_roster)
             away_stars = get_top_players(away_roster)
+            home_proj = get_projected_total(home_roster)
+            away_proj = get_projected_total(away_roster)
             
             h_name = teams.get(home_team_id, {}).get('name', 'Unknown')
             a_name = teams.get(away_team_id, {}).get('name', 'Unknown')
@@ -186,9 +207,11 @@ def process_data(data):
                 'home_team': h_name,
                 'home_record': f"{teams.get(home_team_id, {}).get('wins')}-{teams.get(home_team_id, {}).get('losses')}",
                 'home_key_players': home_stars,
+                'home_proj': home_proj,
                 'away_team': a_name,
                 'away_record': f"{teams.get(away_team_id, {}).get('wins')}-{teams.get(away_team_id, {}).get('losses')}",
                 'away_key_players': away_stars,
+                'away_proj': away_proj,
                 'all_time_h2h': h2h_str
             })
             
@@ -216,7 +239,7 @@ def generate_summary_with_ai(stats):
 
     It is currently Week {stats['week']} of the fantasy season.
     
-    Here is the data for this week's upcoming matchups (including each team's current record, their key starting players, and their all-time Head-to-Head record against each other):
+    Here is the data for this week's upcoming matchups (including each team's current record, their exact ESPN projected scores for this week, their key starting players, and their all-time Head-to-Head record against each other):
     {json.dumps(stats['matchups'], indent=2)}
     
     Please write:
@@ -226,7 +249,8 @@ def generate_summary_with_ai(stats):
     CRITICAL FORMATTING INSTRUCTION: 
     For each matchup, you MUST format it EXACTLY like this HTML template:
     <h3>Away Team Name (Away Record) vs Home Team Name (Home Record)</h3>
-    <p>Your prediction and analysis here (2-3 sentences), referencing analytical models, a key player matchup, and your simulated pick for who will win.</p>
+    <p><strong>ESPN Projection:</strong> Away Team Name ([away_proj]) vs Home Team Name ([home_proj])</p>
+    <p>Your prediction and analysis here (2-3 sentences). You MUST pick the winner based STRICTLY on who has the higher projected score, referencing analytical models, the math, and a key player matchup.</p>
     <p><em>All-Time: [Insert the exact all_time_h2h string provided in the JSON]</em></p>
     <hr>
     
