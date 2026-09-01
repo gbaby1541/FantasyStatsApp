@@ -13,6 +13,8 @@ let highestWeeklyScores = [];
 let highestMargins = [];
 let regularSeasonWins = [];
 let highestSeasonPoints = [];
+let weeklyHighCount = {}; // Map franchiseId -> number
+let activeYears = {}; // Map franchiseId -> Array of years
 
 function sanitize(str) {
     if (typeof str !== 'string') return '';
@@ -259,6 +261,36 @@ function showOwnerPage(teamId, clickedLi) {
     if(ownerProfileName) {
         ownerProfileName.textContent = team.displayName;
     }
+    
+    // --- Summary Bar ---
+    const hHighs = weeklyHighCount[teamId] || 0;
+    const hTitles = champions.filter(c => c.teamId === teamId).length;
+    
+    // Format active years
+    const yearsArr = Array.from(activeYears[teamId] || []).sort((a,b) => a - b);
+    let yearsStr = "None";
+    if (yearsArr.length > 0) {
+        let ranges = [];
+        let start = parseInt(yearsArr[0]);
+        let prev = start;
+        for (let i = 1; i < yearsArr.length; i++) {
+            let curr = parseInt(yearsArr[i]);
+            if (curr === prev + 1) {
+                prev = curr;
+            } else {
+                ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
+                start = curr;
+                prev = curr;
+            }
+        }
+        ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
+        yearsStr = ranges.join(", ");
+    }
+    
+    const el = (id) => document.getElementById(id);
+    if(el('owner-weekly-highs')) el('owner-weekly-highs').textContent = hHighs;
+    if(el('owner-years')) el('owner-years').textContent = yearsStr;
+    if(el('owner-titles')) el('owner-titles').textContent = hTitles;
 
     // --- Current Season Data ---
     const sortedYears = Object.keys(leagueData).sort().reverse();
@@ -400,6 +432,10 @@ function processAggregates() {
                 logo: safeLogo,
                 owners: team.owners // Array of owner IDs
             });
+            
+            // Track active years
+            if (!activeYears[franchiseId]) activeYears[franchiseId] = new Set();
+            activeYears[franchiseId].add(year);
 
             // Initialize allTime records
             if (!allTimeRecords[franchiseId]) {
@@ -440,8 +476,8 @@ function processAggregates() {
                     }
 
                     // WEEKLY SCORES
-                    highestWeeklyScores.push({ teamId: homeId, year: year, score: homeScore, opponentId: awayId });
-                    highestWeeklyScores.push({ teamId: awayId, year: year, score: awayScore, opponentId: homeId });
+                    highestWeeklyScores.push({ teamId: homeId, year: year, week: matchup.matchupPeriodId, score: homeScore, opponentId: awayId });
+                    highestWeeklyScores.push({ teamId: awayId, year: year, week: matchup.matchupPeriodId, score: awayScore, opponentId: homeId });
 
                     // MARGINS
                     const margin = Math.abs(homeScore - awayScore);
@@ -541,6 +577,27 @@ function processAggregates() {
                 w: champ.record.overall.wins,
                 l: champ.record.overall.losses
             });
+        }
+    });
+
+    // 4. Process Weekly High Scores
+    const scoresByYearWeek = {};
+    highestWeeklyScores.forEach(entry => {
+        const key = `${entry.year}-${entry.week}`;
+        if (!scoresByYearWeek[key]) scoresByYearWeek[key] = [];
+        scoresByYearWeek[key].push(entry);
+    });
+
+    Object.values(scoresByYearWeek).forEach(scores => {
+        if (scores.length > 0) {
+            const maxScore = Math.max(...scores.map(s => s.score));
+            if (maxScore > 0) {
+                scores.forEach(s => {
+                    if (s.score === maxScore) {
+                        weeklyHighCount[s.teamId] = (weeklyHighCount[s.teamId] || 0) + 1;
+                    }
+                });
+            }
         }
     });
 }
