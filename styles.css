@@ -262,11 +262,15 @@ main {
 }
 
 .data-table tbody tr {
-    transition: background 0.2s ease;
+    transition: background-color 0.2s ease;
+}
+
+.data-table tbody tr:nth-child(even) {
+    background-color: #1c2128;
 }
 
 .data-table tbody tr:hover {
-    background: rgba(255, 255, 255, 0.03);
+    background-color: #21262d;
 }
 
 .data-table td {
@@ -278,6 +282,15 @@ main {
     left: 0;
     z-index: 2;
     background-color: var(--card-bg);
+    transition: background-color 0.2s ease;
+}
+
+.data-table tbody tr:nth-child(even) .sticky-col {
+    background-color: #1c2128;
+}
+
+.data-table tbody tr:hover .sticky-col {
+    background-color: #21262d;
 }
 
 .data-table th.sticky-col {
