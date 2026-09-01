@@ -49,18 +49,18 @@
                 <button class="tab-btn" data-tab="all-time-records" style="text-align: left; padding: 0.75rem 1rem;">All Time Records</button>
                 <button class="tab-btn" data-tab="h2h" style="text-align: left; padding: 0.75rem 1rem;">Head-to-Head</button>
                 <button class="tab-btn" data-tab="champions" style="text-align: left; padding: 0.75rem 1rem;">Championships</button>
-            </nav>
-
-            <div style="border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
-                <button id="owners-toggle" style="width: 100%; display: flex; justify-content: space-between; align-items: center; background: none; border: none; color: var(--text-secondary); font-size: 1rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 600; cursor: pointer; padding-bottom: 0.5rem;">
-                    Team Owners <span id="owners-toggle-icon" style="font-size: 1.25rem;">+</span>
-                </button>
-                <div id="owners-content" class="nav-content" style="display: none; padding-top: 0.5rem;">
-                    <div id="owner-list">
-                        <!-- Owners injected here -->
+                
+                <div style="width: 100%;">
+                    <button id="owners-toggle" class="tab-btn" style="width: 100%; display: flex; justify-content: space-between; align-items: center; text-align: left; padding: 0.75rem 1rem; cursor: pointer;">
+                        Owners <span id="owners-toggle-icon" style="font-size: 1.25rem; line-height: 1;">+</span>
+                    </button>
+                    <div id="owners-content" class="nav-content" style="display: none; padding-left: 1rem; padding-top: 0.5rem;">
+                        <div id="owner-list">
+                            <!-- Owners injected here -->
+                        </div>
                     </div>
                 </div>
-            </div>
+            </nav>
         </aside>
 
         <main class="main-content">
