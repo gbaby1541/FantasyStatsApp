@@ -313,7 +313,6 @@ function showOwnerPage(teamId, clickedLi) {
     const cGames = cW + cL + cT;
     const cMargin = cGames > 0 ? (cPF - cPA) / cGames : 0;
 
-    const el = (id) => document.getElementById(id);
     if(el('owner-current-record')) el('owner-current-record').textContent = `${cW}-${cL}-${cT}`;
     if(el('owner-current-pf')) el('owner-current-pf').textContent = cPF.toFixed(1);
     if(el('owner-current-pa')) el('owner-current-pa').textContent = cPA.toFixed(1);
