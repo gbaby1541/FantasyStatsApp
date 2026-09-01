@@ -284,7 +284,7 @@ function showOwnerPage(teamId, clickedLi) {
             }
         }
         ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
-        yearsStr = ranges.join(", ");
+        yearsStr = `${ranges.join(", ")} (${yearsArr.length} seasons)`;
     }
     
     const el = (id) => document.getElementById(id);
