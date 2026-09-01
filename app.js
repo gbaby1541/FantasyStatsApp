@@ -255,6 +255,16 @@ function showOwnerPage(teamId, clickedLi) {
         window.history.pushState(null, null, `#owner-${teamId}`);
     }
     
+    // On mobile, collapse the owners menu so they don't have to scroll down to see the profile
+    if (window.innerWidth < 768) {
+        const ownersContent = document.getElementById('owners-content');
+        const ownersToggleIcon = document.getElementById('owners-toggle-icon');
+        if (ownersContent && ownersToggleIcon) {
+            ownersContent.style.display = 'none';
+            ownersToggleIcon.textContent = '+';
+        }
+    }
+    
     // Populate basic info
     const team = allTeams.get(teamId);
     if(!team) return;
