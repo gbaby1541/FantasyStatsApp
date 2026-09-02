@@ -212,7 +212,7 @@ function renderSidebar() {
     const currentNames = [
         "al prysiazniuk", "blair adams", "dan brunette", "david hakalo", 
         "gary balkus", "gregory gretch", "jack crane", "jamie itani", 
-        "justin bommer", "shawn bolton", "thomas pallisco", "tim balkus"
+        "justin bommer", "michael samelak", "thomas pallisco", "tim balkus"
     ];
 
     const teamArray = Array.from(allTeams.values()).sort((a, b) => a.displayName.localeCompare(b.displayName));
