@@ -142,7 +142,10 @@ function switchTab(tabId) {
 
     targetBtn.classList.add('active');
     const content = document.getElementById(tabId);
-    if (content) content.classList.add('active');
+    if (content) {
+        content.classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
     
     const ownerProfile = document.getElementById('owner-profile');
     if (ownerProfile && tabId !== 'owner-profile') {
@@ -154,7 +157,9 @@ tabButtons.forEach(btn => {
     btn.addEventListener('click', () => {
         const tabId = btn.dataset.tab;
         switchTab(tabId);
-        window.location.hash = tabId;
+        if (window.location.hash !== `#${tabId}`) {
+            window.history.pushState(null, null, `#${tabId}`);
+        }
     });
 });
 
@@ -248,7 +253,10 @@ function showOwnerPage(teamId, clickedLi) {
     if(clickedLi) clickedLi.classList.add('active');
 
     // Show owner profile section
-    if(ownerProfileSection) ownerProfileSection.classList.add('active');
+    if(ownerProfileSection) {
+        ownerProfileSection.classList.add('active');
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
     
     // Update URL hash without triggering endless loop
     if (window.location.hash !== `#owner-${teamId}`) {
