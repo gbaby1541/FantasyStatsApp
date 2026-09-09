@@ -951,10 +951,10 @@ function renderH2H() {
 
         <div class="h2h-streaks-container">
             <div class="h2h-streak-line">
-                <span class="h2h-streak-label">Current win streak:</span> (${currentStreakText})
+                <span class="h2h-streak-label">Current win streak:</span> ${currentStreakText}
             </div>
             <div class="h2h-streak-line">
-                <span class="h2h-streak-label">Longest win streak:</span> (${longestStreakText})
+                <span class="h2h-streak-label">Longest win streak:</span> ${longestStreakText}
             </div>
         </div>
 
