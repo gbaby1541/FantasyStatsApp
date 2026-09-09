@@ -858,7 +858,6 @@ function renderH2H() {
                 <tr>
                     <td><strong>${game.year}</strong></td>
                     <td>Week ${game.week}${game.isPlayoff ? ' <span class="h2h-playoff-tag">Playoffs</span>' : ''}</td>
-                    <td>${team1Data.displayName} vs ${team2Data.displayName}</td>
                     <td class="h2h-score-col">
                         ${t1ScoreFormatted} <span class="h2h-score-sep">&ndash;</span> ${t2ScoreFormatted}
                     </td>
@@ -867,7 +866,7 @@ function renderH2H() {
             `;
         }).join('');
     } else {
-        resultsRows = `<tr><td colspan="5" style="text-align:center; color:var(--text-secondary); font-style:italic;">No detailed matchup results found.</td></tr>`;
+        resultsRows = `<tr><td colspan="4" style="text-align:center; color:var(--text-secondary); font-style:italic;">No detailed matchup results found.</td></tr>`;
     }
 
     // 1. Calculate Current Win Streak (from most recent games backwards)
@@ -969,7 +968,6 @@ function renderH2H() {
                         <tr>
                             <th>Year</th>
                             <th>Week</th>
-                            <th>Matchup</th>
                             <th>Score (${team1Data.displayName} - ${team2Data.displayName})</th>
                             <th>Winner</th>
                         </tr>
