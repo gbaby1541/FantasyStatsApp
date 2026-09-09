@@ -389,9 +389,31 @@ main {
     font-weight: 500;
 }
 
+/* Head to Head Streaks */
+.h2h-streaks-container {
+    margin-bottom: 2rem;
+    padding: 1rem 1.5rem;
+    background: var(--bg-color);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    text-align: left;
+}
+
+.h2h-streak-line {
+    font-size: 0.95rem;
+    color: var(--text-primary);
+}
+
+.h2h-streak-label {
+    color: var(--warning);
+    font-weight: 700;
+}
+
 /* Head to Head Results Section */
 .h2h-results-section {
-    margin-top: 2rem;
     text-align: left;
 }
 

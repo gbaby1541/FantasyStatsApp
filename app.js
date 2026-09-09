@@ -870,6 +870,67 @@ function renderH2H() {
         resultsRows = `<tr><td colspan="5" style="text-align:center; color:var(--text-secondary); font-style:italic;">No detailed matchup results found.</td></tr>`;
     }
 
+    // 1. Calculate Current Win Streak (from most recent games backwards)
+    let currentStreakPlayer = null;
+    let currentStreakCount = 0;
+
+    for (let i = 0; i < sortedGames.length; i++) {
+        const g = sortedGames[i];
+        if (!g.winnerId) {
+            break; // Tie ended the streak
+        }
+        if (!currentStreakPlayer) {
+            currentStreakPlayer = g.winnerId;
+            currentStreakCount = 1;
+        } else if (g.winnerId === currentStreakPlayer) {
+            currentStreakCount++;
+        } else {
+            break;
+        }
+    }
+
+    let currentStreakText = 'None';
+    if (currentStreakPlayer && currentStreakCount > 0) {
+        const pName = allTeams.get(currentStreakPlayer)?.displayName || currentStreakPlayer;
+        currentStreakText = `${pName} is on a ${currentStreakCount} game win streak in this matchup`;
+    }
+
+    // 2. Calculate Longest Win Streak (chronological order)
+    const chronoGames = (records.games || []).slice().sort((a, b) => {
+        if (a.year !== b.year) return a.year - b.year;
+        return a.week - b.week;
+    });
+
+    let longestStreakCount = 0;
+    let longestStreakHolders = [];
+    let curWinner = null;
+    let curCount = 0;
+
+    chronoGames.forEach(g => {
+        if (!g.winnerId) {
+            curWinner = null;
+            curCount = 0;
+        } else if (g.winnerId === curWinner) {
+            curCount++;
+        } else {
+            curWinner = g.winnerId;
+            curCount = 1;
+        }
+
+        if (curCount > longestStreakCount) {
+            longestStreakCount = curCount;
+            longestStreakHolders = [curWinner];
+        } else if (curCount === longestStreakCount && !longestStreakHolders.includes(curWinner)) {
+            longestStreakHolders.push(curWinner);
+        }
+    });
+
+    let longestStreakText = 'None';
+    if (longestStreakCount > 0) {
+        const holderNames = longestStreakHolders.map(id => allTeams.get(id)?.displayName || id).join(' & ');
+        longestStreakText = `${holderNames}, ${longestStreakCount} ${longestStreakCount === 1 ? 'game' : 'games'}`;
+    }
+
     h2hResults.innerHTML = `
         <div class="matchup-stats">
             <div class="stat-box">
@@ -885,6 +946,15 @@ function renderH2H() {
                 <div class="stat-value ${records.l > records.w ? 'text-green' : (records.l < records.w ? 'text-red' : '')}">${records.l}</div>
                 <div class="stat-label">${team2Data.displayName} Wins</div>
                 <div class="stat-label" style="margin-top:0.5rem">PF: ${records.pa.toFixed(1)}</div>
+            </div>
+        </div>
+
+        <div class="h2h-streaks-container">
+            <div class="h2h-streak-line">
+                <span class="h2h-streak-label">Current win streak:</span> (${currentStreakText})
+            </div>
+            <div class="h2h-streak-line">
+                <span class="h2h-streak-label">Longest win streak:</span> (${longestStreakText})
             </div>
         </div>
 
