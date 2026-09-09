@@ -389,14 +389,97 @@ main {
     font-weight: 500;
 }
 
-.recent-games {
+/* Head to Head Results Section */
+.h2h-results-section {
+    margin-top: 2rem;
     text-align: left;
 }
 
-.recent-games h3 {
-    font-size: 1rem;
+.h2h-results-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.h2h-results-header h3 {
+    font-size: 1.25rem;
+    font-weight: 700;
     color: #fff;
+    margin: 0;
+}
+
+.h2h-count-badge {
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--text-secondary);
+    padding: 0.25rem 0.6rem;
+    border-radius: 20px;
+    border: 1px solid var(--border-color);
+}
+
+.h2h-results-table th {
+    white-space: nowrap;
+}
+
+.h2h-score-col {
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+
+.h2h-winning-score {
+    font-weight: 800;
+    color: #fff;
+}
+
+.h2h-losing-score {
+    font-weight: 400;
+    color: var(--text-secondary);
+}
+
+.h2h-score-sep {
+    color: var(--text-secondary);
+    margin: 0 0.25rem;
+}
+
+.h2h-winner-badge {
+    display: inline-block;
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.h2h-badge-t1, .h2h-badge-t2 {
+    background: rgba(35, 134, 54, 0.2);
+    color: #3fb950;
+    border: 1px solid rgba(63, 185, 80, 0.3);
+}
+
+.h2h-badge-tie {
+    background: rgba(227, 179, 65, 0.15);
+    color: var(--warning);
+    border: 1px solid rgba(227, 179, 65, 0.3);
+}
+
+.h2h-playoff-tag {
+    display: inline-block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    padding: 0.15rem 0.4rem;
+    background: rgba(227, 179, 65, 0.2);
+    color: var(--warning);
+    border-radius: 3px;
+    margin-left: 0.35rem;
+    vertical-align: middle;
 }
 
 /* Champions Grid */

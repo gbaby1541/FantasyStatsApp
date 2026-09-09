@@ -520,19 +520,19 @@ function processAggregates() {
                     allTimeRecords[awayId].pf += awayScore;
                     allTimeRecords[awayId].pa += homeScore;
 
+                    const isPlayoff = matchup.playoffTierType === "WINNERS_BRACKET";
                     if (homeWon) {
                         allTimeRecords[homeId].w += 1;
                         allTimeRecords[awayId].l += 1;
-                        recordH2H(homeId, awayId, true, false, homeScore, awayScore);
+                        recordH2H(homeId, awayId, true, false, homeScore, awayScore, year, matchup.matchupPeriodId, isPlayoff);
                     } else if (awayWon) {
                         allTimeRecords[awayId].w += 1;
                         allTimeRecords[homeId].l += 1;
-                        recordH2H(awayId, homeId, true, false, awayScore, homeScore);
+                        recordH2H(awayId, homeId, true, false, awayScore, homeScore, year, matchup.matchupPeriodId, isPlayoff);
                     } else if (isTie) {
                         allTimeRecords[homeId].t += 1;
                         allTimeRecords[awayId].t += 1;
-                        recordH2H(homeId, awayId, false, true, homeScore, awayScore);
-                        recordH2H(awayId, homeId, false, true, awayScore, homeScore);
+                        recordH2H(homeId, awayId, false, true, homeScore, awayScore, year, matchup.matchupPeriodId, isPlayoff);
                     }
 
                     if (matchup.playoffTierType === "WINNERS_BRACKET") {
@@ -619,9 +619,11 @@ function processAggregates() {
     });
 }
 
-function recordH2H(winnerId, loserId, won, tied, winnerScore, loserScore) {
-    if (!headToHeadRecords[winnerId][loserId]) headToHeadRecords[winnerId][loserId] = { w: 0, l: 0, t: 0, pf: 0, pa: 0 };
-    if (!headToHeadRecords[loserId][winnerId]) headToHeadRecords[loserId][winnerId] = { w: 0, l: 0, t: 0, pf: 0, pa: 0 };
+function recordH2H(winnerId, loserId, won, tied, winnerScore, loserScore, year, week, isPlayoff) {
+    if (!headToHeadRecords[winnerId]) headToHeadRecords[winnerId] = {};
+    if (!headToHeadRecords[loserId]) headToHeadRecords[loserId] = {};
+    if (!headToHeadRecords[winnerId][loserId]) headToHeadRecords[winnerId][loserId] = { w: 0, l: 0, t: 0, pf: 0, pa: 0, games: [] };
+    if (!headToHeadRecords[loserId][winnerId]) headToHeadRecords[loserId][winnerId] = { w: 0, l: 0, t: 0, pf: 0, pa: 0, games: [] };
 
     if (won) {
         headToHeadRecords[winnerId][loserId].w += 1;
@@ -636,6 +638,22 @@ function recordH2H(winnerId, loserId, won, tied, winnerScore, loserScore) {
 
     headToHeadRecords[loserId][winnerId].pf += loserScore;
     headToHeadRecords[loserId][winnerId].pa += winnerScore;
+
+    if (year !== undefined && week !== undefined) {
+        const gameEntry = {
+            year: Number(year),
+            week: Number(week),
+            team1Id: winnerId,
+            team2Id: loserId,
+            team1Score: winnerScore,
+            team2Score: loserScore,
+            winnerId: won ? winnerId : null,
+            isTie: tied,
+            isPlayoff: !!isPlayoff
+        };
+        headToHeadRecords[winnerId][loserId].games.push(gameEntry);
+        headToHeadRecords[loserId][winnerId].games.push(gameEntry);
+    }
 }
 
 // --- UI POPULATION ---
@@ -806,6 +824,52 @@ function renderH2H() {
     const team1Data = allTeams.get(t1);
     const team2Data = allTeams.get(t2);
 
+    const sortedGames = (records.games || []).slice().sort((a, b) => {
+        if (b.year !== a.year) return b.year - a.year;
+        return b.week - a.week;
+    });
+
+    let resultsRows = '';
+    if (sortedGames.length > 0) {
+        resultsRows = sortedGames.map(game => {
+            const t1Score = (game.team1Id === t1) ? game.team1Score : game.team2Score;
+            const t2Score = (game.team1Id === t1) ? game.team2Score : game.team1Score;
+            const t1Won = game.winnerId === t1;
+            const t2Won = game.winnerId === t2;
+
+            const t1ScoreFormatted = t1Won
+                ? `<strong class="h2h-winning-score">${t1Score.toFixed(2)}</strong>`
+                : `<span class="h2h-losing-score">${t1Score.toFixed(2)}</span>`;
+            const t2ScoreFormatted = t2Won
+                ? `<strong class="h2h-winning-score">${t2Score.toFixed(2)}</strong>`
+                : `<span class="h2h-losing-score">${t2Score.toFixed(2)}</span>`;
+
+            let winnerText = 'Tie';
+            let winnerBadgeClass = 'h2h-badge-tie';
+            if (t1Won) {
+                winnerText = team1Data.displayName;
+                winnerBadgeClass = 'h2h-badge-t1';
+            } else if (t2Won) {
+                winnerText = team2Data.displayName;
+                winnerBadgeClass = 'h2h-badge-t2';
+            }
+
+            return `
+                <tr>
+                    <td><strong>${game.year}</strong></td>
+                    <td>Week ${game.week}${game.isPlayoff ? ' <span class="h2h-playoff-tag">Playoffs</span>' : ''}</td>
+                    <td>${team1Data.displayName} vs ${team2Data.displayName}</td>
+                    <td class="h2h-score-col">
+                        ${t1ScoreFormatted} <span class="h2h-score-sep">&ndash;</span> ${t2ScoreFormatted}
+                    </td>
+                    <td><span class="h2h-winner-badge ${winnerBadgeClass}">${winnerText}</span></td>
+                </tr>
+            `;
+        }).join('');
+    } else {
+        resultsRows = `<tr><td colspan="5" style="text-align:center; color:var(--text-secondary); font-style:italic;">No detailed matchup results found.</td></tr>`;
+    }
+
     h2hResults.innerHTML = `
         <div class="matchup-stats">
             <div class="stat-box">
@@ -821,6 +885,29 @@ function renderH2H() {
                 <div class="stat-value ${records.l > records.w ? 'text-green' : (records.l < records.w ? 'text-red' : '')}">${records.l}</div>
                 <div class="stat-label">${team2Data.displayName} Wins</div>
                 <div class="stat-label" style="margin-top:0.5rem">PF: ${records.pa.toFixed(1)}</div>
+            </div>
+        </div>
+
+        <div class="h2h-results-section">
+            <div class="h2h-results-header">
+                <h3>Results</h3>
+                <span class="h2h-count-badge">${sortedGames.length} ${sortedGames.length === 1 ? 'Matchup' : 'Matchups'}</span>
+            </div>
+            <div class="table-responsive">
+                <table class="data-table h2h-results-table">
+                    <thead>
+                        <tr>
+                            <th>Year</th>
+                            <th>Week</th>
+                            <th>Matchup</th>
+                            <th>Score (${team1Data.displayName} - ${team2Data.displayName})</th>
+                            <th>Winner</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${resultsRows}
+                    </tbody>
+                </table>
             </div>
         </div>
     `;
