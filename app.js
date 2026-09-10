@@ -968,7 +968,7 @@ function renderH2H() {
                         <tr>
                             <th>Year</th>
                             <th>Week</th>
-                            <th>Score (${team1Data.displayName} - ${team2Data.displayName})</th>
+                            <th>Score</th>
                             <th>Winner</th>
                         </tr>
                     </thead>
