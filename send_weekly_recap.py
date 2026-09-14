@@ -122,9 +122,10 @@ def process_data(data):
         owner_id = team.get('owners', [None])[0] if team.get('owners') else None
         owner_name = members.get(owner_id, 'Unknown')
         lower_name = owner_name.lower()
-        if lower_name == "b a": owner_name = "Blair Adams"
+        if lower_name in ["b a", "blair dams"]: owner_name = "Blair Adams"
         if lower_name in ["t balkus", "tim balkus"]: owner_name = "Tim Balkus"
         if lower_name in ["chuck hutson", "charles hutson"]: owner_name = "Charles Hutson"
+        if lower_name in ["jack crane"]: owner_name = "Jack Crane"
         
         first_name = owner_name.split()[0] if owner_name != 'Unknown' else team.get('name', 'Unknown')
         
@@ -161,8 +162,8 @@ def process_data(data):
             home_team_id = home.get('teamId')
             away_team_id = away.get('teamId')
             
-            home_score = home.get('totalPoints', 0)
-            away_score = away.get('totalPoints', 0)
+            home_score = home.get('totalPoints') if home.get('totalPoints') else home.get('totalPointsLive', 0)
+            away_score = away.get('totalPoints') if away.get('totalPoints') else away.get('totalPointsLive', 0)
             
             if home_score > week_high_score:
                 week_high_score = home_score
@@ -178,7 +179,12 @@ def process_data(data):
             elif winner_id == 'AWAY':
                 winner = teams.get(away_team_id, {}).get('name', 'Unknown')
             else:
-                winner = 'Tie'
+                if home_score > away_score:
+                    winner = teams.get(home_team_id, {}).get('name', 'Unknown')
+                elif away_score > home_score:
+                    winner = teams.get(away_team_id, {}).get('name', 'Unknown')
+                else:
+                    winner = 'Tie'
                 
             margin = abs(home_score - away_score)
             if margin > biggest_margin:
@@ -234,6 +240,21 @@ def process_data(data):
                             top_player_score = points
                             top_player = player_name
                             
+    # If standings records are still unfinalized by ESPN (all 0-0), populate from current week games
+    if all(t['wins'] == 0 and t['losses'] == 0 for t in teams.values()):
+        for m in matchups:
+            for t in teams.values():
+                if t['name'] == m['home_team']:
+                    t['points_for'] = m['home_score']
+                    if m['winner'] == m['home_team']: t['wins'] = 1
+                    elif m['winner'] == m['away_team']: t['losses'] = 1
+                    else: t['ties'] = 1
+                elif t['name'] == m['away_team']:
+                    t['points_for'] = m['away_score']
+                    if m['winner'] == m['away_team']: t['wins'] = 1
+                    elif m['winner'] == m['home_team']: t['losses'] = 1
+                    else: t['ties'] = 1
+
     # Calculate standings
     standings = sorted(teams.values(), key=lambda x: (x['wins'], x['points_for']), reverse=True)
     
