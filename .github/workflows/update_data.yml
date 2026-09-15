@@ -2,8 +2,8 @@ name: Update Fantasy Data
 
 on:
   schedule:
-    # Runs at 08:00 UTC (4:00 AM EST) every Tuesday
-    - cron: '0 8 * * 2'
+    # Runs at 12:25 UTC (8:25 AM EDT / 7:25 AM EST) every Tuesday (10 mins before recap email)
+    - cron: '25 12 * * 2'
   workflow_dispatch:
 
 jobs:

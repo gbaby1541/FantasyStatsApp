@@ -7,7 +7,13 @@ import os
 
 league_id = "121269"
 
-SWID = os.environ.get("ESPN_SWID", "")
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
+SWID = os.environ.get("SWID") or os.environ.get("ESPN_SWID", "")
 ESPN_S2 = os.environ.get("ESPN_S2", "")
 
 # Create unverified context to bypass local cert issues
