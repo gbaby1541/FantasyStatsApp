@@ -18,10 +18,17 @@ on:
         description: 'Test Email Override (e.g. garybalkus@gmail.com). Leave blank to send to all.'
         required: false
         type: string
+      force:
+        description: 'Force send even if already recorded as sent'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   send-email:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     
     steps:
     - name: Checkout repository
@@ -53,4 +60,13 @@ jobs:
         TEST_WEEK: ${{ github.event.inputs.test_week }}
         TEST_SEASON: ${{ github.event.inputs.test_season }}
         TEST_EMAIL: ${{ github.event.inputs.test_email }}
+        FORCE_SEND: ${{ github.event.inputs.force }}
       run: python send_weekly_preview.py
+
+    - name: Commit and push sent tracker
+      if: success()
+      run: |
+        git config --global user.name 'GitHub Actions'
+        git config --global user.email 'actions@github.com'
+        git add last_preview_sent.json
+        git diff --quiet && git diff --staged --quiet || (git commit -m "Update last preview sent log" && git push)

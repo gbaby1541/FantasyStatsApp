@@ -331,6 +331,35 @@ def send_email(subject, html_content):
     except Exception as e:
         print(f"Failed to send email: {e}")
 
+SENT_LOG_FILE = "last_preview_sent.json"
+
+def is_already_sent(season, week):
+    if os.getenv("FORCE_SEND", "").lower() in ["true", "1", "yes"] or TEST_EMAIL:
+        return False
+    if os.path.exists(SENT_LOG_FILE):
+        try:
+            with open(SENT_LOG_FILE, "r") as f:
+                data = json.load(f)
+            if str(data.get("season")) == str(season) and int(data.get("week", -1)) == int(week):
+                return True
+        except Exception as e:
+            print(f"Warning: could not read {SENT_LOG_FILE}: {e}")
+    return False
+
+def record_sent(season, week):
+    try:
+        from datetime import datetime, timezone
+        data = {
+            "season": str(season),
+            "week": int(week),
+            "sent_at": datetime.now(timezone.utc).isoformat()
+        }
+        with open(SENT_LOG_FILE, "w") as f:
+            json.dump(data, f, indent=2)
+        print(f"Recorded preview email sent in {SENT_LOG_FILE} for Season {season}, Week {week}.")
+    except Exception as e:
+        print(f"Warning: could not write {SENT_LOG_FILE}: {e}")
+
 def main():
     try:
         print("Fetching data from ESPN...")
@@ -343,6 +372,10 @@ def main():
             print("No matchups found for the upcoming week. Exiting gracefully.")
             return
             
+        if is_already_sent(SEASON, stats['week']):
+            print(f"Preview email for Season {SEASON} Week {stats['week']} has already been sent. Skipping duplicate send.")
+            return
+            
         print(f"Generating AI preview for Week {stats['week']}...")
         ai_html = generate_summary_with_ai(stats)
         
@@ -353,6 +386,7 @@ def main():
         
         print("Dispatching email...")
         send_email(subject, email_html)
+        record_sent(SEASON, stats['week'])
         print("Done!")
     except Exception as e:
         print(f"An error occurred: {e}")
