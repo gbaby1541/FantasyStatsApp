@@ -52,6 +52,23 @@ def get_espn_data():
         raise Exception(f"Error fetching data from ESPN: {response.status_code}\nResponse: {response.text}")
     return response.json()
 
+def get_week_rosters(matchup_period):
+    url = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{SEASON}/segments/0/leagues/{LEAGUE_ID}?view=mRoster&scoringPeriodId={matchup_period}"
+    headers = {}
+    cookies = {}
+    if ESPN_S2:
+        cookies['espn_s2'] = ESPN_S2
+    if SWID:
+        cookies['swid'] = SWID
+    try:
+        response = requests.get(url, headers=headers, cookies=cookies)
+        if response.status_code == 200:
+            data = response.json()
+            return {team['id']: team.get('roster', {}).get('entries', []) for team in data.get('teams', [])}
+    except Exception as e:
+        print(f"Error fetching week {matchup_period} rosters from ESPN: {e}")
+    return {}
+
 def get_optimal_score(roster_entries, slot_limits):
     players = []
     for entry in roster_entries:
@@ -220,6 +237,7 @@ def process_data(data):
     career_stats, h2h_records = get_historical_context()
     current_season_optimal = get_current_season_optimal()
     week_opt_data = current_season_optimal.get(str(matchup_period), {})
+    week_rosters = get_week_rosters(matchup_period)
 
     # Process matchups for the selected week
     matchups = []
@@ -275,11 +293,15 @@ def process_data(data):
                 closest_margin = margin
                 closest_winner = winner if winner != 'Tie' else "Tie"
                 
-            home_roster = game.get('home', {}).get('rosterForCurrentScoringPeriod', {}).get('entries', [])
+            home_roster = week_rosters.get(home_team_id, [])
+            if not home_roster:
+                home_roster = game.get('home', {}).get('rosterForCurrentScoringPeriod', {}).get('entries', [])
             if not home_roster:
                 home_roster = game.get('home', {}).get('rosterForMatchupPeriod', {}).get('entries', [])
             
-            away_roster = game.get('away', {}).get('rosterForCurrentScoringPeriod', {}).get('entries', [])
+            away_roster = week_rosters.get(away_team_id, [])
+            if not away_roster:
+                away_roster = game.get('away', {}).get('rosterForCurrentScoringPeriod', {}).get('entries', [])
             if not away_roster:
                 away_roster = game.get('away', {}).get('rosterForMatchupPeriod', {}).get('entries', [])
             
