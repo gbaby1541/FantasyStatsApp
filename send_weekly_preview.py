@@ -52,6 +52,16 @@ def get_espn_data():
         raise Exception(f"Error fetching data from ESPN: {response.status_code}\nResponse: {response.text}")
     return response.json()
 
+def normalize_owner_name(name):
+    clean = ' '.join(name.strip().split())
+    lower = clean.lower()
+    if lower in ["b a", "blair dams"]: return "Blair Adams"
+    if lower in ["t balkus", "tim balkus"]: return "Tim Balkus"
+    if lower in ["chuck hutson", "charles hutson"]: return "Charles Hutson"
+    if lower in ["dave hakalo", "david hakalo"]: return "David Hakalo"
+    if lower in ["jack crane"]: return "Jack Crane"
+    return clean
+
 def get_h2h_records(team1_first, team2_first):
     try:
         with open('data.js', 'r') as f:
@@ -67,18 +77,22 @@ def get_h2h_records(team1_first, team2_first):
         t2_wins = 0
         ties = 0
         
+        t1_target = team1_first.strip().lower()
+        t2_target = team2_first.strip().lower()
+        if t1_target in ['dave', 'david']: t1_target = 'david'
+        if t2_target in ['dave', 'david']: t2_target = 'david'
+        if t1_target in ['greg', 'gregory']: t1_target = 'gregory'
+        if t2_target in ['greg', 'gregory']: t2_target = 'gregory'
+        
         for year, year_data in history.items():
             if not year_data: continue
-            members = {m['id']: f"{m.get('firstName', '')} {m.get('lastName', '')}".strip() for m in year_data.get('members', [])}
+            members = {m['id']: normalize_owner_name(f"{m.get('firstName', '')} {m.get('lastName', '')}") for m in year_data.get('members', [])}
             teams_map = {}
             for t in year_data.get('teams', []):
                 owner_id = t.get('owners', [None])[0] if t.get('owners') else None
-                owner_name = members.get(owner_id, 'Unknown').lower()
-                if owner_name == "b a": owner_name = "blair adams"
-                if owner_name in ["t balkus", "tim balkus"]: owner_name = "tim balkus"
-                if owner_name in ["chuck hutson", "charles hutson"]: owner_name = "charles hutson"
-                
-                owner_first = owner_name.split()[0] if owner_name != 'unknown' else 'unknown'
+                owner_name = members.get(owner_id, 'Unknown')
+                owner_name = normalize_owner_name(owner_name)
+                owner_first = owner_name.split()[0].lower() if owner_name != 'Unknown' else 'unknown'
                 teams_map[t['id']] = owner_first
 
             for game in year_data.get('schedule', []):
@@ -89,17 +103,16 @@ def get_h2h_records(team1_first, team2_first):
                     h_owner = teams_map.get(h_id)
                     a_owner = teams_map.get(a_id)
                     
-                    t1 = team1_first.lower()
-                    t2 = team2_first.lower()
-                    
-                    if (h_owner == t1 and a_owner == t2) or (h_owner == t2 and a_owner == t1):
+                    if (h_owner == t1_target and a_owner == t2_target) or (h_owner == t2_target and a_owner == t1_target):
                         h_score = game['home'].get('totalPoints', 0)
                         a_score = game['away'].get('totalPoints', 0)
-                        if h_score > a_score:
-                            if h_owner == t1: t1_wins += 1
+                        hw = game.get('winner') == 'HOME'
+                        aw = game.get('winner') == 'AWAY'
+                        if hw or h_score > a_score:
+                            if h_owner == t1_target: t1_wins += 1
                             else: t2_wins += 1
-                        elif a_score > h_score:
-                            if a_owner == t1: t1_wins += 1
+                        elif aw or a_score > h_score:
+                            if a_owner == t1_target: t1_wins += 1
                             else: t2_wins += 1
                         else:
                             ties += 1
@@ -115,17 +128,14 @@ def process_data(data):
     else:
         matchup_period = data.get('scoringPeriodId', 1)
         
-    members = {m['id']: f"{m.get('firstName', '')} {m.get('lastName', '')}".strip() for m in data.get('members', [])}
+    members = {m['id']: normalize_owner_name(f"{m.get('firstName', '')} {m.get('lastName', '')}") for m in data.get('members', [])}
         
     # Extract teams
     teams = {}
     for team in data.get('teams', []):
         owner_id = team.get('owners', [None])[0] if team.get('owners') else None
         owner_name = members.get(owner_id, 'Unknown')
-        lower_name = owner_name.lower()
-        if lower_name == "b a": owner_name = "Blair Adams"
-        if lower_name in ["t balkus", "tim balkus"]: owner_name = "Tim Balkus"
-        if lower_name in ["chuck hutson", "charles hutson"]: owner_name = "Charles Hutson"
+        owner_name = normalize_owner_name(owner_name)
         
         first_name = owner_name.split()[0] if owner_name != 'Unknown' else team.get('name', 'Unknown')
         

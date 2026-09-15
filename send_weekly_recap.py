@@ -102,6 +102,31 @@ def get_roster_highlights(roster):
         'top_bench': bench[0] if bench else None
     }
 
+def get_current_season_optimal():
+    try:
+        with open('data.js', 'r') as f:
+            content = f.read()
+        marker = 'const currentSeasonOptimal = '
+        idx = content.find(marker)
+        if idx != -1:
+            raw = content[idx + len(marker):].strip()
+            if raw.endswith(';'):
+                raw = raw[:-1]
+            return json.loads(raw)
+    except Exception as e:
+        print(f"Error loading currentSeasonOptimal from data.js: {e}")
+    return {}
+
+def normalize_owner_name(name):
+    clean = ' '.join(name.strip().split())
+    lower = clean.lower()
+    if lower in ["b a", "blair dams"]: return "Blair Adams"
+    if lower in ["t balkus", "tim balkus"]: return "Tim Balkus"
+    if lower in ["chuck hutson", "charles hutson"]: return "Charles Hutson"
+    if lower in ["dave hakalo", "david hakalo"]: return "David Hakalo"
+    if lower in ["jack crane"]: return "Jack Crane"
+    return clean
+
 def get_historical_context():
     try:
         with open('data.js', 'r') as f:
@@ -117,24 +142,20 @@ def get_historical_context():
         h2h_records = {}
         
         for year, ydata in history.items():
-            if not ydata or str(year) == "2026": continue
-            members = {m['id']: (m.get('firstName', '') + ' ' + m.get('lastName', '')).strip() for m in ydata.get('members', [])}
+            if not ydata: continue
+            members = {m['id']: normalize_owner_name(f"{m.get('firstName', '')} {m.get('lastName', '')}") for m in ydata.get('members', [])}
             teams = {}
             for t in ydata.get('teams', []):
                 owner_id = t.get('owners', [None])[0] if t.get('owners') else None
                 name = members.get(owner_id, 'Unknown').strip()
-                lower = name.lower()
-                if lower in ["b a", "blair dams"]: name = "Blair Adams"
-                if lower in ["t balkus", "tim balkus"]: name = "Tim Balkus"
-                if lower in ["chuck hutson", "charles hutson"]: name = "Charles Hutson"
-                if lower in ["jack crane"]: name = "Jack Crane"
+                name = normalize_owner_name(name)
                 first = name.split()[0] if name != 'Unknown' else 'Unknown'
                 teams[t['id']] = first
                 if first not in career_stats and first != 'Unknown':
                     career_stats[first] = {'name': name, 'wins': 0, 'losses': 0, 'ties': 0, 'blowouts_30plus': 0}
             
             for g in ydata.get('schedule', []):
-                if g.get('playoffTierType') == 'NONE' and g.get('winner') != 'UNDECIDED' and g.get('home') and g.get('away'):
+                if g.get('winner') != 'UNDECIDED' and g.get('home') and g.get('away'):
                     h = teams.get(g['home']['teamId'])
                     a = teams.get(g['away']['teamId'])
                     hs = g['home'].get('totalPoints', 0)
@@ -143,12 +164,14 @@ def get_historical_context():
                         pair = tuple(sorted([h, a]))
                         if pair not in h2h_records:
                             h2h_records[pair] = {h: 0, a: 0, 'ties': 0}
-                        if hs > as_:
+                        hw = g.get('winner') == 'HOME'
+                        aw = g.get('winner') == 'AWAY'
+                        if hw or hs > as_:
                             career_stats[h]['wins'] += 1
                             career_stats[a]['losses'] += 1
                             h2h_records[pair][h] += 1
                             if hs - as_ >= 30: career_stats[a]['blowouts_30plus'] += 1
-                        elif as_ > hs:
+                        elif aw or as_ > hs:
                             career_stats[a]['wins'] += 1
                             career_stats[h]['losses'] += 1
                             h2h_records[pair][a] += 1
@@ -174,18 +197,14 @@ def process_data(data):
         if matchup_period < 1:
             matchup_period = 1 # Edge case
 
-    members = {m['id']: f"{m.get('firstName', '')} {m.get('lastName', '')}".strip() for m in data.get('members', [])}
+    members = {m['id']: normalize_owner_name(f"{m.get('firstName', '')} {m.get('lastName', '')}") for m in data.get('members', [])}
     
     # Extract teams
     teams = {}
     for team in data.get('teams', []):
         owner_id = team.get('owners', [None])[0] if team.get('owners') else None
         owner_name = members.get(owner_id, 'Unknown')
-        lower_name = owner_name.lower()
-        if lower_name in ["b a", "blair dams"]: owner_name = "Blair Adams"
-        if lower_name in ["t balkus", "tim balkus"]: owner_name = "Tim Balkus"
-        if lower_name in ["chuck hutson", "charles hutson"]: owner_name = "Charles Hutson"
-        if lower_name in ["jack crane"]: owner_name = "Jack Crane"
+        owner_name = normalize_owner_name(owner_name)
         
         first_name = owner_name.split()[0] if owner_name != 'Unknown' else team.get('name', 'Unknown')
         
@@ -199,6 +218,8 @@ def process_data(data):
         }
 
     career_stats, h2h_records = get_historical_context()
+    current_season_optimal = get_current_season_optimal()
+    week_opt_data = current_season_optimal.get(str(matchup_period), {})
 
     # Process matchups for the selected week
     matchups = []
@@ -262,8 +283,13 @@ def process_data(data):
             if not away_roster:
                 away_roster = game.get('away', {}).get('rosterForMatchupPeriod', {}).get('entries', [])
             
-            home_optimal = get_optimal_score(home_roster, slot_limits)
-            away_optimal = get_optimal_score(away_roster, slot_limits)
+            home_optimal = week_opt_data.get(str(home_team_id))
+            if home_optimal is None or home_optimal == 0:
+                home_optimal = get_optimal_score(home_roster, slot_limits)
+            
+            away_optimal = week_opt_data.get(str(away_team_id))
+            if away_optimal is None or away_optimal == 0:
+                away_optimal = get_optimal_score(away_roster, slot_limits)
             
             home_highlights = get_roster_highlights(home_roster)
             away_highlights = get_roster_highlights(away_roster)
@@ -283,7 +309,7 @@ def process_data(data):
             elif h_w > 0:
                 h2h_str = f"Tied {h_w}-{a_w}"
             else:
-                h2h_str = "First regular season meeting"
+                h2h_str = "First all-time meeting"
             if t_cnt > 0:
                 h2h_str += f"-{t_cnt}"
                 
@@ -452,19 +478,22 @@ def build_email_html(stats, ai_html):
 
     changed_matchups = []
     for m in stats['matchups']:
-        actual_winner = "Home" if m['home_score'] > m['away_score'] else ("Away" if m['away_score'] > m['home_score'] else "Tie")
-        optimal_winner = "Home" if m['home_optimal'] > m['away_optimal'] else ("Away" if m['away_optimal'] > m['home_optimal'] else "Tie")
+        h_opt = m.get('home_optimal', 0.0)
+        a_opt = m.get('away_optimal', 0.0)
+        h_score = m['home_score']
+        a_score = m['away_score']
         
-        if actual_winner != optimal_winner:
-            winner_team = m['home_team'] if optimal_winner == "Home" else (m['away_team'] if optimal_winner == "Away" else "Tie")
-            loser_team = m['away_team'] if optimal_winner == "Home" else (m['home_team'] if optimal_winner == "Away" else "Tie")
-            winner_score = m['home_optimal'] if optimal_winner == "Home" else m['away_optimal']
-            loser_score = m['away_optimal'] if optimal_winner == "Home" else m['home_optimal']
+        # Only evaluate if both teams have valid positive optimal scores
+        if h_opt > 0 and a_opt > 0:
+            actual_winner = "Home" if h_score > a_score else ("Away" if a_score > h_score else "Tie")
+            optimal_winner = "Home" if h_opt > a_opt else ("Away" if a_opt > h_opt else "Tie")
             
-            if optimal_winner != "Tie":
+            if actual_winner != optimal_winner and optimal_winner in ["Home", "Away"]:
+                winner_team = m['home_team'] if optimal_winner == "Home" else m['away_team']
+                loser_team = m['away_team'] if optimal_winner == "Home" else m['home_team']
+                winner_score = h_opt if optimal_winner == "Home" else a_opt
+                loser_score = a_opt if optimal_winner == "Home" else h_opt
                 changed_matchups.append(f"<li style='margin-bottom: 6px;'><strong style='color: #0f1f18;'>{winner_team}</strong> would have beaten {loser_team} (<strong style='color: #0f1f18;'>{winner_score:.2f}</strong> to {loser_score:.2f})</li>")
-            else:
-                changed_matchups.append(f"<li style='margin-bottom: 6px;'><strong style='color: #0f1f18;'>{winner_team}</strong> and {loser_team} would have tied ({winner_score:.2f} to {loser_score:.2f})</li>")
 
     if changed_matchups:
         optimal_content = f"""
