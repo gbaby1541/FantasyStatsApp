@@ -2,8 +2,8 @@ name: Send Weekly Fantasy Preview Email
 
 on:
   schedule:
-    # Runs at 12:35 UTC (8:35 AM EDT / 7:35 AM EST) every Wednesday
-    - cron: '35 12 * * 3'
+    # Runs at 10:35 UTC (6:35 AM EDT / 5:35 AM EST) every Wednesday
+    - cron: '35 10 * * 3'
   workflow_dispatch:
     inputs:
       test_week:
