@@ -303,7 +303,7 @@ def process_data(data):
             })
             
     # Calculate standings for context
-    standings = sorted(teams.values(), key=lambda x: x['wins'], reverse=True)
+    standings = sorted(teams.values(), key=lambda x: (x['wins'], x['points_for']), reverse=True)
     
     return {
         'week': matchup_period,
