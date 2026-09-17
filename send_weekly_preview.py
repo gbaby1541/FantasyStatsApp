@@ -121,6 +121,80 @@ def get_h2h_records(team1_first, team2_first):
         print(f"Error calculating H2H: {e}")
         return 0, 0, 0
 
+def get_h2h_streak(team1_first, team2_first):
+    """Returns a string describing the current H2H win streak if 2+ games, else None."""
+    try:
+        with open('data.js', 'r') as f:
+            content = f.read()
+        start = content.find('{')
+        end = content.find('};\n\nconst currentSeasonOptimal')
+        if end == -1:
+            end = content.find('};')
+        json_str = content[start:end+1]
+        history = json.loads(json_str)
+
+        t1_target = team1_first.strip().lower()
+        t2_target = team2_first.strip().lower()
+        if t1_target in ['dave', 'david']: t1_target = 'david'
+        if t2_target in ['dave', 'david']: t2_target = 'david'
+        if t1_target in ['greg', 'gregory']: t1_target = 'gregory'
+        if t2_target in ['greg', 'gregory']: t2_target = 'gregory'
+
+        # Collect all H2H games in chronological order (year asc, then matchupPeriodId asc)
+        results = []  # list of 't1' or 't2' for who won
+        for year in sorted(history.keys()):
+            year_data = history[year]
+            if not year_data: continue
+            members = {m['id']: normalize_owner_name(f"{m.get('firstName', '')} {m.get('lastName', '')}") for m in year_data.get('members', [])}
+            teams_map = {}
+            for t in year_data.get('teams', []):
+                owner_id = t.get('owners', [None])[0] if t.get('owners') else None
+                owner_name = members.get(owner_id, 'Unknown')
+                owner_name = normalize_owner_name(owner_name)
+                owner_first = owner_name.split()[0].lower() if owner_name != 'Unknown' else 'unknown'
+                teams_map[t['id']] = owner_first
+
+            # Sort games within the year by matchupPeriodId so they're in order
+            games = sorted(
+                [g for g in year_data.get('schedule', []) if g.get('winner') != 'UNDECIDED' and g.get('home') and g.get('away')],
+                key=lambda g: g.get('matchupPeriodId', 0)
+            )
+            for game in games:
+                h_id = game['home']['teamId']
+                a_id = game['away']['teamId']
+                h_owner = teams_map.get(h_id)
+                a_owner = teams_map.get(a_id)
+                if (h_owner == t1_target and a_owner == t2_target) or (h_owner == t2_target and a_owner == t1_target):
+                    h_score = game['home'].get('totalPoints', 0)
+                    a_score = game['away'].get('totalPoints', 0)
+                    hw = game.get('winner') == 'HOME'
+                    aw = game.get('winner') == 'AWAY'
+                    if hw or h_score > a_score:
+                        results.append('t1' if h_owner == t1_target else 't2')
+                    elif aw or a_score > h_score:
+                        results.append('t1' if a_owner == t1_target else 't2')
+                    # ties are skipped (no streak impact)
+
+        if not results:
+            return None
+
+        # Walk backwards to find the current streak
+        last_winner = results[-1]
+        streak = 1
+        for result in reversed(results[:-1]):
+            if result == last_winner:
+                streak += 1
+            else:
+                break
+
+        if streak >= 2:
+            winner_name = team1_first if last_winner == 't1' else team2_first
+            return f"{winner_name} has won {streak} straight against {team2_first if last_winner == 't1' else team1_first}"
+        return None
+    except Exception as e:
+        print(f"Error calculating H2H streak: {e}")
+        return None
+
 def process_data(data):
     # For preview, the upcoming week is the CURRENT scoring period
     if TEST_WEEK:
@@ -213,7 +287,8 @@ def process_data(data):
                 h2h_str = f"Tied {h_h2h_wins}-{a_h2h_wins}"
             if h2h_ties > 0:
                 h2h_str += f"-{h2h_ties}"
-            
+
+            streak_str = get_h2h_streak(h_name, a_name)
             matchups.append({
                 'home_team': h_name,
                 'home_record': f"{teams.get(home_team_id, {}).get('wins')}-{teams.get(home_team_id, {}).get('losses')}",
@@ -223,7 +298,8 @@ def process_data(data):
                 'away_record': f"{teams.get(away_team_id, {}).get('wins')}-{teams.get(away_team_id, {}).get('losses')}",
                 'away_key_players': away_stars,
                 'away_proj': away_proj,
-                'all_time_h2h': h2h_str
+                'all_time_h2h': h2h_str,
+                'h2h_streak': streak_str  # None if no streak of 2+
             })
             
     # Calculate standings for context
@@ -267,8 +343,10 @@ def generate_summary_with_ai(stats):
          <div style="color: #725624; font-size: 13px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px;">Away Team Name vs Home Team Name</div>
          <p style="color: #1a2e24; font-size: 15px; line-height: 1.65; margin: 0 0 8px 0;"><strong style="color: #0f1f18;">ESPN Projection:</strong> Away Team ([away_proj]) vs Home Team ([home_proj])</p>
          <p style="color: #1a2e24; font-size: 15px; line-height: 1.65; margin: 0 0 8px 0;">Your 2-3 sentence prediction and analysis. Pick the winner based on who has the higher projected score, referencing key players and head-to-head history.</p>
-         <p style="color: #1a2e24; font-size: 14px; line-height: 1.5; margin: 0;"><em>All-Time: [Insert the exact all_time_h2h string provided in the JSON]</em></p>
+         <p style="color: #1a2e24; font-size: 14px; line-height: 1.5; margin: 0;"><em>All-Time: [Insert the exact all_time_h2h string provided in the JSON]. If h2h_streak is not null, also add: "🔥 [Insert the exact h2h_streak string]."</em></p>
        </div>
+
+    STREAK RULE: If a matchup's h2h_streak field is not null, you MUST naturally work that streak into your prediction prose. For example: "David has rattled off 5 straight wins against Jamie in H2H play — the pressure is on." Only mention it if h2h_streak is present; never invent streaks.
 
     Do NOT include Markdown wrappers like ```html or ```. Output raw HTML only. Do NOT include any standings tables.
     """
