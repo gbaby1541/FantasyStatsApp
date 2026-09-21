@@ -69,11 +69,24 @@ def get_week_rosters(matchup_period):
         print(f"Error fetching week {matchup_period} rosters from ESPN: {e}")
     return {}
 
+def get_player_week_points(entry, scoring_period_id=None):
+    """Extract the actual fantasy points scored for this specific week.
+    ESPN entry.stats[] contains per-period stat rows; statSourceId=0 means actual (not projected).
+    Falls back to playerPoolEntry.appliedStatTotal only as a last resort.
+    """
+    for stat in entry.get('stats', []):
+        if stat.get('statSourceId', -1) == 0:  # 0 = actual scored, 1 = projected
+            # If we know the scoring period, match it; otherwise take the first actual row
+            if scoring_period_id is None or stat.get('scoringPeriodId') == scoring_period_id:
+                return stat.get('appliedTotal', 0)
+    # Fallback: some roster views don't include stats[], use appliedStatTotal
+    return entry.get('playerPoolEntry', {}).get('appliedStatTotal', 0)
+
 def get_optimal_score(roster_entries, slot_limits):
     players = []
     for entry in roster_entries:
         player_info = entry.get('playerPoolEntry', {})
-        points = player_info.get('appliedStatTotal', 0)
+        points = get_player_week_points(entry)
         eligible_slots = player_info.get('player', {}).get('eligibleSlots', [])
         players.append({'points': points, 'slots': eligible_slots, 'name': player_info.get('player', {}).get('fullName')})
     
@@ -102,7 +115,7 @@ def get_roster_highlights(roster):
     bench = []
     for entry in roster:
         player_name = entry.get('playerPoolEntry', {}).get('player', {}).get('fullName', 'Unknown')
-        points = entry.get('playerPoolEntry', {}).get('appliedStatTotal', 0)
+        points = get_player_week_points(entry)
         slot = entry.get('lineupSlotId')
         
         if slot not in [20, 21, 24]:
@@ -356,7 +369,7 @@ def process_data(data):
             for side_roster in [home_roster, away_roster]:
                 for entry in side_roster:
                     player_name = entry.get('playerPoolEntry', {}).get('player', {}).get('fullName', 'Unknown')
-                    points = entry.get('playerPoolEntry', {}).get('appliedStatTotal', 0)
+                    points = get_player_week_points(entry, matchup_period)
                     acq_type = entry.get('acquisitionType')
                     
                     if acq_type in ['WAIVER', 'FREEAGENT']:
