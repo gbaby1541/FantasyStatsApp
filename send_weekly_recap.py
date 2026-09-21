@@ -82,11 +82,11 @@ def get_player_week_points(entry, scoring_period_id=None):
     # Fallback: some roster views don't include stats[], use appliedStatTotal
     return entry.get('playerPoolEntry', {}).get('appliedStatTotal', 0)
 
-def get_optimal_score(roster_entries, slot_limits):
+def get_optimal_score(roster_entries, slot_limits, scoring_period_id=None):
     players = []
     for entry in roster_entries:
         player_info = entry.get('playerPoolEntry', {})
-        points = get_player_week_points(entry)
+        points = get_player_week_points(entry, scoring_period_id)
         eligible_slots = player_info.get('player', {}).get('eligibleSlots', [])
         players.append({'points': points, 'slots': eligible_slots, 'name': player_info.get('player', {}).get('fullName')})
     
@@ -110,12 +110,12 @@ def get_optimal_score(roster_entries, slot_limits):
                 break
     return total_score
 
-def get_roster_highlights(roster):
+def get_roster_highlights(roster, scoring_period_id=None):
     starters = []
     bench = []
     for entry in roster:
         player_name = entry.get('playerPoolEntry', {}).get('player', {}).get('fullName', 'Unknown')
-        points = get_player_week_points(entry)
+        points = get_player_week_points(entry, scoring_period_id)
         slot = entry.get('lineupSlotId')
         
         if slot not in [20, 21, 24]:
@@ -320,14 +320,14 @@ def process_data(data):
             
             home_optimal = week_opt_data.get(str(home_team_id))
             if home_optimal is None or home_optimal == 0:
-                home_optimal = get_optimal_score(home_roster, slot_limits)
+                home_optimal = get_optimal_score(home_roster, slot_limits, matchup_period)
             
             away_optimal = week_opt_data.get(str(away_team_id))
             if away_optimal is None or away_optimal == 0:
-                away_optimal = get_optimal_score(away_roster, slot_limits)
+                away_optimal = get_optimal_score(away_roster, slot_limits, matchup_period)
             
-            home_highlights = get_roster_highlights(home_roster)
-            away_highlights = get_roster_highlights(away_roster)
+            home_highlights = get_roster_highlights(home_roster, matchup_period)
+            away_highlights = get_roster_highlights(away_roster, matchup_period)
             
             h_team_name = teams.get(home_team_id, {}).get('name', 'Unknown')
             a_team_name = teams.get(away_team_id, {}).get('name', 'Unknown')
