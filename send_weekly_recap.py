@@ -306,18 +306,27 @@ def process_data(data):
                 closest_margin = margin
                 closest_winner = winner if winner != 'Tie' else "Tie"
                 
+            # For player highlights (MVP, bench regrets), use the rosters embedded
+            # directly in the schedule game object — these have correct per-week
+            # appliedStatTotal values. The mRoster view returns inflated season totals.
+            home_highlight_roster = (
+                game.get('home', {}).get('rosterForMatchupPeriod', {}).get('entries', [])
+                or game.get('home', {}).get('rosterForCurrentScoringPeriod', {}).get('entries', [])
+            )
+            away_highlight_roster = (
+                game.get('away', {}).get('rosterForMatchupPeriod', {}).get('entries', [])
+                or game.get('away', {}).get('rosterForCurrentScoringPeriod', {}).get('entries', [])
+            )
+
+            # For optimal score calculation, use week_rosters (mRoster view) which has
+            # the full eligible slot data needed; fall back to schedule rosters.
             home_roster = week_rosters.get(home_team_id, [])
             if not home_roster:
-                home_roster = game.get('home', {}).get('rosterForCurrentScoringPeriod', {}).get('entries', [])
-            if not home_roster:
-                home_roster = game.get('home', {}).get('rosterForMatchupPeriod', {}).get('entries', [])
-            
+                home_roster = home_highlight_roster
             away_roster = week_rosters.get(away_team_id, [])
             if not away_roster:
-                away_roster = game.get('away', {}).get('rosterForCurrentScoringPeriod', {}).get('entries', [])
-            if not away_roster:
-                away_roster = game.get('away', {}).get('rosterForMatchupPeriod', {}).get('entries', [])
-            
+                away_roster = away_highlight_roster
+
             home_optimal = week_opt_data.get(str(home_team_id))
             if home_optimal is None or home_optimal == 0:
                 home_optimal = get_optimal_score(home_roster, slot_limits, matchup_period)
@@ -326,8 +335,8 @@ def process_data(data):
             if away_optimal is None or away_optimal == 0:
                 away_optimal = get_optimal_score(away_roster, slot_limits, matchup_period)
             
-            home_highlights = get_roster_highlights(home_roster, matchup_period)
-            away_highlights = get_roster_highlights(away_roster, matchup_period)
+            home_highlights = get_roster_highlights(home_highlight_roster, matchup_period)
+            away_highlights = get_roster_highlights(away_highlight_roster, matchup_period)
             
             h_team_name = teams.get(home_team_id, {}).get('name', 'Unknown')
             a_team_name = teams.get(away_team_id, {}).get('name', 'Unknown')
@@ -365,11 +374,12 @@ def process_data(data):
                 'winner': winner
             })
             
-            # Find the top player and best waiver
-            for side_roster in [home_roster, away_roster]:
+            # Find the top player and best waiver pick — use schedule-embedded
+            # rosters for accurate per-week player scores
+            for side_roster in [home_highlight_roster, away_highlight_roster]:
                 for entry in side_roster:
                     player_name = entry.get('playerPoolEntry', {}).get('player', {}).get('fullName', 'Unknown')
-                    points = get_player_week_points(entry, matchup_period)
+                    points = entry.get('playerPoolEntry', {}).get('appliedStatTotal', 0)
                     acq_type = entry.get('acquisitionType')
                     
                     if acq_type in ['WAIVER', 'FREEAGENT']:
