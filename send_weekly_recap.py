@@ -446,11 +446,17 @@ def generate_summary_with_ai(stats):
 
     REQUIRED EDITORIAL SECTIONS (Write engaging content for each):
     1. Card: "THE OPENING SALVO" (or "WEEK {stats['week']} HEADLINER"): 1-2 punchy paragraphs capturing the theme of the week, surprising blowouts, and standout highs.
-    2. Card: "THE WOODEN SPOON DEBATE": Roast the lowest scoring team or the most embarrassing blowout of the week (e.g. David scoring 66.20, Al getting hammered by Jamie, etc.). Reference their career stats or blowout losses from the career data provided.
+    2. Card: "THE WOODEN SPOON DEBATE": Roast the lowest scoring team or the most embarrassing blowout of the week. Reference their career stats or blowout losses from the career data provided.
     3. Standalone Heading: <div style="color: #d6a75c; font-size: 13px; font-weight: 800; letter-spacing: 2.5px; text-transform: uppercase; margin: 32px 0 14px 4px;">GRUDGES TO SETTLE</div>
-    4. Card: "RIVALRIES & CLOSE SHAVES": Highlight the nail-biters and rivalry matchups (e.g. Justin edging Dan by 0.76 pts, Gary holding off Mike by 17.72 pts). Mention their all_time_h2h records.
-    5. Card: "BENCH REGRETS & NIGHTMARES": Roast any manager who left game-changing points on their bench (e.g. Michael having Caleb Williams drop 41.26 on his bench while starting Goff for 20.44!).
+    4. Card: "RIVALRIES & CLOSE SHAVES": Highlight the nail-biters and rivalry matchups. Mention their all_time_h2h records.
+    5. Card: "BENCH REGRETS & NIGHTMARES": Roast any manager who left game-changing points on their bench.
     6. Card: "MATCHUP SPOTLIGHTS": Quick 1-2 sentence analytical roasts/praise for the remaining matchups.
+    7. Card: "THE DAVID HAKALO LUCK REPORT" (MANDATORY — include EVERY single week, no exceptions): Write a creative, funny 2-3 sentence roast specifically about how lucky David Hakalo is at fantasy football. This must ALWAYS appear regardless of whether David won or lost this week. Use a fresh angle each time — some ideas:
+       - If David won: how he probably stumbled into it, got bailed out by a garbage-time score, a kicker, or his opponent's star player getting hurt at the worst moment.
+       - If David lost: even in defeat, highlight some absurd lucky element — maybe he still scored more than he deserved, or his bench somehow outscored his starters.
+       - Reference his career record, blowout losses suffered, or all-time H2H dominance as evidence of either dumb luck or cosmic blessing.
+       - Get creative with the framing each week — "David's luck is so strong he probably found a $20 in his pocket after losing." Give it a different comedic voice every week. Never repeat the same joke structure.
+       Use this week's matchup data AND the career stats provided to ground the roast in real numbers.
 
     Do NOT include Markdown wrappers like ```html or ```. Output raw HTML snippets only. Do NOT include standings or raw scoreboard, those are added separately.
     """
