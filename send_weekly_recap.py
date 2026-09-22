@@ -53,20 +53,51 @@ def get_espn_data():
     return response.json()
 
 def get_week_rosters(matchup_period):
-    url = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{SEASON}/segments/0/leagues/{LEAGUE_ID}?view=mRoster&scoringPeriodId={matchup_period}"
-    headers = {}
+    """Fetch per-week roster data by passing scoringPeriodId explicitly.
+    Uses mMatchupScore+mRoster so rosterForMatchupPeriod has correct weekly player scores."""
     cookies = {}
-    if ESPN_S2:
-        cookies['espn_s2'] = ESPN_S2
-    if SWID:
-        cookies['swid'] = SWID
+    if ESPN_S2: cookies['espn_s2'] = ESPN_S2
+    if SWID: cookies['swid'] = SWID
+
+    # Primary: schedule view with explicit scoringPeriodId — rosterForMatchupPeriod
+    # has correct per-week appliedStatTotal values for the completed week.
+    url = (f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{SEASON}"
+           f"/segments/0/leagues/{LEAGUE_ID}"
+           f"?view=mMatchupScore&view=mRoster&scoringPeriodId={matchup_period}")
     try:
-        response = requests.get(url, headers=headers, cookies=cookies)
+        response = requests.get(url, cookies=cookies)
+        if response.status_code == 200:
+            data = response.json()
+            rosters = {}
+            for game in data.get('schedule', []):
+                if game.get('matchupPeriodId') != matchup_period:
+                    continue
+                for side in ['home', 'away']:
+                    team_id = game.get(side, {}).get('teamId')
+                    if team_id is None:
+                        continue
+                    entries = (
+                        game[side].get('rosterForMatchupPeriod', {}).get('entries', [])
+                        or game[side].get('rosterForCurrentScoringPeriod', {}).get('entries', [])
+                    )
+                    if entries:
+                        rosters[team_id] = entries
+            if rosters:
+                print(f"get_week_rosters: loaded {len(rosters)} teams via schedule view for period {matchup_period}")
+                return rosters
+    except Exception as e:
+        print(f"Error fetching week {matchup_period} rosters (schedule view): {e}")
+
+    # Fallback: bare mRoster view
+    url_fallback = (f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{SEASON}"
+                    f"/segments/0/leagues/{LEAGUE_ID}?view=mRoster&scoringPeriodId={matchup_period}")
+    try:
+        response = requests.get(url_fallback, cookies=cookies)
         if response.status_code == 200:
             data = response.json()
             return {team['id']: team.get('roster', {}).get('entries', []) for team in data.get('teams', [])}
     except Exception as e:
-        print(f"Error fetching week {matchup_period} rosters from ESPN: {e}")
+        print(f"Error fetching week {matchup_period} rosters (mRoster fallback): {e}")
     return {}
 
 def get_player_week_points(entry, scoring_period_id=None):
