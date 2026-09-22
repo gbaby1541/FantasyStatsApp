@@ -413,11 +413,14 @@ def process_data(data):
             })
             
             # Find the top player and best waiver pick
+            print(f"MVP loop: home_team_id={home_team_id} home_roster_len={len(home_roster)} away_team_id={away_team_id} away_roster_len={len(away_roster)}")
             for side_roster in [home_roster, away_roster]:
                 for entry in side_roster:
                     player_name = entry.get('playerPoolEntry', {}).get('player', {}).get('fullName', 'Unknown')
                     points = entry.get('playerPoolEntry', {}).get('appliedStatTotal', 0)
+                    slot = entry.get('lineupSlotId')
                     acq_type = entry.get('acquisitionType')
+                    print(f"  {player_name}: pts={points} slot={slot} acq={acq_type}")
                     
                     if acq_type in ['WAIVER', 'FREEAGENT']:
                         if points > best_waiver_score:
@@ -425,7 +428,7 @@ def process_data(data):
                             best_waiver_player = player_name
                             
                     # Slot 20 is Bench, 21 is IR. We only care about starters for Top Player.
-                    if entry.get('lineupSlotId') not in [20, 21, 24]:
+                    if slot not in [20, 21, 24]:
                         if points > top_player_score:
                             top_player_score = points
                             top_player = player_name
