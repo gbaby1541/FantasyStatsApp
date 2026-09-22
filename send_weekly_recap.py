@@ -541,6 +541,7 @@ def generate_summary_with_ai(stats):
         return "<p style='color: #d6a75c;'><em>Error generating AI summary.</em></p>"
 
 def build_email_html(stats, ai_html):
+    print(f"BUILD_EMAIL: top_player='{stats.get('top_player')}' score={stats.get('top_player_score')}")
     # Scoreboard rows
     scoreboard_rows = ""
     for m in stats['matchups']:
