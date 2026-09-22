@@ -678,10 +678,7 @@ def build_email_html(stats, ai_html):
       </table>
     </div>
 
-    <!-- Footer -->
-    <div style="text-align: center; padding: 20px 0 35px 0; color: #787d8a; font-size: 11px; letter-spacing: 1.5px; text-transform: uppercase;">
-      AUTOMATED VIA ANTIGRAVITY &bull; FANTASY STATS APP
-    </div>
+
 
   </div>
 </body>
