@@ -451,6 +451,7 @@ def process_data(data):
     # Calculate standings
     standings = sorted(teams.values(), key=lambda x: (x['wins'], x['points_for']), reverse=True)
     
+    print(f"FINAL: top_player='{top_player}' top_player_score={top_player_score} best_waiver='{best_waiver_player}' best_waiver_score={best_waiver_score}")
     return {
         'week': matchup_period,
         'matchups': matchups,
