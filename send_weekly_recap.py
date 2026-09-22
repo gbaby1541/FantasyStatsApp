@@ -53,38 +53,55 @@ def get_espn_data():
     return response.json()
 
 def get_week_rosters(matchup_period):
-    """Fetch per-week roster data by passing scoringPeriodId explicitly.
-    Uses mMatchupScore+mRoster so rosterForMatchupPeriod has correct weekly player scores."""
+    """Fetch per-week roster data by passing scoringPeriodId explicitly."""
     cookies = {}
     if ESPN_S2: cookies['espn_s2'] = ESPN_S2
     if SWID: cookies['swid'] = SWID
 
-    # Primary: schedule view with explicit scoringPeriodId — rosterForMatchupPeriod
-    # has correct per-week appliedStatTotal values for the completed week.
+    # Use the full set of views (same as main data call) + explicit scoringPeriodId
     url = (f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{SEASON}"
            f"/segments/0/leagues/{LEAGUE_ID}"
-           f"?view=mMatchupScore&view=mRoster&scoringPeriodId={matchup_period}")
+           f"?view=mMatchupScore&view=mTeam&view=mRoster&view=mSettings&view=mMatchup"
+           f"&scoringPeriodId={matchup_period}")
     try:
         response = requests.get(url, cookies=cookies)
+        print(f"get_week_rosters: HTTP {response.status_code} for period {matchup_period}")
         if response.status_code == 200:
             data = response.json()
+            schedule = data.get('schedule', [])
+            print(f"get_week_rosters: {len(schedule)} total games in schedule")
+            # Log what matchupPeriodIds we see
+            periods_seen = set(g.get('matchupPeriodId') for g in schedule[:10])
+            print(f"get_week_rosters: matchupPeriodIds seen: {periods_seen}")
+
             rosters = {}
-            for game in data.get('schedule', []):
+            for game in schedule:
                 if game.get('matchupPeriodId') != matchup_period:
                     continue
                 for side in ['home', 'away']:
                     team_id = game.get(side, {}).get('teamId')
                     if team_id is None:
                         continue
+                    home_obj = game[side]
+                    has_matchup = bool(home_obj.get('rosterForMatchupPeriod', {}).get('entries'))
+                    has_current = bool(home_obj.get('rosterForCurrentScoringPeriod', {}).get('entries'))
                     entries = (
-                        game[side].get('rosterForMatchupPeriod', {}).get('entries', [])
-                        or game[side].get('rosterForCurrentScoringPeriod', {}).get('entries', [])
+                        home_obj.get('rosterForMatchupPeriod', {}).get('entries', [])
+                        or home_obj.get('rosterForCurrentScoringPeriod', {}).get('entries', [])
                     )
+                    print(f"  team {team_id} ({side}): rosterForMatchupPeriod={has_matchup} rosterForCurrentScoringPeriod={has_current} entries={len(entries)}")
                     if entries:
+                        # Log first player's score for sanity
+                        e = entries[0]
+                        pname = e.get('playerPoolEntry', {}).get('player', {}).get('fullName', '?')
+                        pscore = e.get('playerPoolEntry', {}).get('appliedStatTotal', 'N/A')
+                        print(f"    first player: {pname} appliedStatTotal={pscore}")
                         rosters[team_id] = entries
             if rosters:
-                print(f"get_week_rosters: loaded {len(rosters)} teams via schedule view for period {matchup_period}")
+                print(f"get_week_rosters: loaded {len(rosters)} teams via schedule view")
                 return rosters
+            else:
+                print(f"get_week_rosters: schedule view returned 0 teams with rosters — falling back")
     except Exception as e:
         print(f"Error fetching week {matchup_period} rosters (schedule view): {e}")
 
@@ -93,9 +110,20 @@ def get_week_rosters(matchup_period):
                     f"/segments/0/leagues/{LEAGUE_ID}?view=mRoster&scoringPeriodId={matchup_period}")
     try:
         response = requests.get(url_fallback, cookies=cookies)
+        print(f"get_week_rosters fallback: HTTP {response.status_code}")
         if response.status_code == 200:
             data = response.json()
-            return {team['id']: team.get('roster', {}).get('entries', []) for team in data.get('teams', [])}
+            result = {team['id']: team.get('roster', {}).get('entries', []) for team in data.get('teams', [])}
+            print(f"get_week_rosters fallback: loaded {len(result)} teams")
+            if result:
+                # Log first player from first team
+                first_team = next(iter(result.values()))
+                if first_team:
+                    e = first_team[0]
+                    pname = e.get('playerPoolEntry', {}).get('player', {}).get('fullName', '?')
+                    pscore = e.get('playerPoolEntry', {}).get('appliedStatTotal', 'N/A')
+                    print(f"  fallback first player: {pname} appliedStatTotal={pscore}")
+            return result
     except Exception as e:
         print(f"Error fetching week {matchup_period} rosters (mRoster fallback): {e}")
     return {}
