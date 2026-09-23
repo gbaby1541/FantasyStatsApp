@@ -770,6 +770,9 @@ def is_already_sent(season, week):
     return False
 
 def record_sent(season, week):
+    if TEST_EMAIL:
+        print(f"Test email sent to {TEST_EMAIL}; skipping recording in {SENT_LOG_FILE}.")
+        return
     try:
         from datetime import datetime, timezone
         data = {
