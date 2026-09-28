@@ -274,6 +274,152 @@ def get_historical_context():
         print(f"Error extracting history: {e}")
         return {}, {}
 
+def calculate_power_points(teams_list, value_func):
+    sorted_teams = sorted(teams_list, key=value_func, reverse=True)
+    points_map = {}
+    n = len(teams_list)
+    i = 0
+    while i < n:
+        tie_count = 1
+        val_i = value_func(sorted_teams[i])
+        while i + tie_count < n and value_func(sorted_teams[i + tie_count]) == val_i:
+            tie_count += 1
+        total_pts = sum(n - (i + j) for j in range(tie_count))
+        pts_per_team = total_pts / tie_count
+        for j in range(tie_count):
+            points_map[sorted_teams[i + j]['id']] = pts_per_team
+        i += tie_count
+    return points_map
+
+def compute_power_rankings_for_week(data, teams_meta, up_to_week):
+    if up_to_week < 1:
+        return []
+
+    team_stats = {}
+    for tid, tinfo in teams_meta.items():
+        team_stats[tid] = {
+            'id': tid,
+            'name': tinfo['name'],
+            'w': 0, 'l': 0, 't': 0,
+            'pf': 0.0,
+            'total_w': 0, 'total_l': 0, 'total_t': 0
+        }
+
+    weekly_scores = {}
+    for g in data.get('schedule', []):
+        if g.get('playoffTierType', 'NONE') != 'NONE':
+            continue
+        wk = g.get('matchupPeriodId', 0)
+        if wk > up_to_week:
+            continue
+        home = g.get('home', {})
+        away = g.get('away', {})
+        if not home or not away:
+            continue
+        hid = home.get('teamId')
+        aid = away.get('teamId')
+        if hid not in team_stats or aid not in team_stats:
+            continue
+
+        hs = home.get('totalPoints') if home.get('totalPoints') is not None else home.get('totalPointsLive', 0.0)
+        as_ = away.get('totalPoints') if away.get('totalPoints') is not None else away.get('totalPointsLive', 0.0)
+        if hs == 0 and as_ == 0 and g.get('winner') == 'UNDECIDED':
+            continue
+
+        winner = g.get('winner')
+        if winner == 'HOME' or (winner not in ['AWAY', 'TIE'] and hs > as_):
+            team_stats[hid]['w'] += 1
+            team_stats[aid]['l'] += 1
+        elif winner == 'AWAY' or (winner not in ['HOME', 'TIE'] and as_ > hs):
+            team_stats[aid]['w'] += 1
+            team_stats[hid]['l'] += 1
+        else:
+            team_stats[hid]['t'] += 1
+            team_stats[aid]['t'] += 1
+
+        team_stats[hid]['pf'] += hs
+        team_stats[aid]['pf'] += as_
+
+        if wk not in weekly_scores:
+            weekly_scores[wk] = []
+        weekly_scores[wk].append({'id': hid, 'score': hs})
+        weekly_scores[wk].append({'id': aid, 'score': as_})
+
+    # All-play record calculation across weeks
+    for wk, scores in weekly_scores.items():
+        for i in range(len(scores)):
+            for j in range(i + 1, len(scores)):
+                ti = team_stats[scores[i]['id']]
+                tj = team_stats[scores[j]['id']]
+                if scores[i]['score'] > scores[j]['score']:
+                    ti['total_w'] += 1
+                    tj['total_l'] += 1
+                elif scores[i]['score'] < scores[j]['score']:
+                    ti['total_l'] += 1
+                    tj['total_w'] += 1
+                else:
+                    ti['total_t'] += 1
+                    tj['total_t'] += 1
+
+    teams_arr = list(team_stats.values())
+    rec_pts = calculate_power_points(teams_arr, lambda t: t['w'] + (t['t'] * 0.5))
+    tr_pts = calculate_power_points(teams_arr, lambda t: t['total_w'] + (t['total_t'] * 0.5))
+    pf_pts = calculate_power_points(teams_arr, lambda t: round(t['pf'], 2))
+
+    pr_list = []
+    for t in teams_arr:
+        rp = rec_pts.get(t['id'], 0)
+        trp = tr_pts.get(t['id'], 0)
+        pfp = pf_pts.get(t['id'], 0)
+        tot = rp + trp + pfp
+        pr_list.append({
+            'id': t['id'],
+            'name': t['name'],
+            'w': t['w'], 'l': t['l'], 't': t['t'],
+            'pf': t['pf'],
+            'total_w': t['total_w'], 'total_l': t['total_l'], 'total_t': t['total_t'],
+            'r_pts': rp, 'tr_pts': trp, 'pf_pts': pfp,
+            'total_pts': tot
+        })
+
+    # Sort descending by total_pts, then pf, then wins
+    pr_list.sort(key=lambda x: (x['total_pts'], x['pf'], x['w']), reverse=True)
+    return pr_list
+
+def get_power_rankings_with_changes(data, teams_meta, current_week):
+    curr_pr = compute_power_rankings_for_week(data, teams_meta, current_week)
+    if not curr_pr:
+        return []
+
+    prev_pr = compute_power_rankings_for_week(data, teams_meta, current_week - 1)
+    prev_rank_map = {t['id']: idx + 1 for idx, t in enumerate(prev_pr)}
+
+    results = []
+    for idx, t in enumerate(curr_pr):
+        curr_rank = idx + 1
+        prev_rank = prev_rank_map.get(t['id'])
+        if prev_rank is not None and current_week > 1:
+            diff = prev_rank - curr_rank
+        else:
+            diff = 0
+
+        record_str = f"{t['w']}-{t['l']}"
+        if t.get('t', 0) > 0:
+            record_str += f"-{t['t']}"
+
+        results.append({
+            'rank': curr_rank,
+            'prev_rank': prev_rank,
+            'diff': diff,
+            'has_prev': (prev_rank is not None and current_week > 1),
+            'id': t['id'],
+            'name': t['name'],
+            'record': record_str,
+            'pf': t['pf'],
+            'total_pts': t['total_pts']
+        })
+    return results
+
 def process_data(data):
     # Determine the week that just finished
     if TEST_WEEK:
@@ -451,11 +597,15 @@ def process_data(data):
     # Calculate standings
     standings = sorted(teams.values(), key=lambda x: (x['wins'], x['points_for']), reverse=True)
     
+    # Calculate power rankings with week-over-week changes
+    power_rankings = get_power_rankings_with_changes(data, teams, matchup_period)
+
     print(f"FINAL: top_player='{top_player}' top_player_score={top_player_score} best_waiver='{best_waiver_player}' best_waiver_score={best_waiver_score}")
     return {
         'week': matchup_period,
         'matchups': matchups,
         'standings': standings,
+        'power_rankings': power_rankings,
         'career_stats': career_stats,
         'high_scorer_team': high_scorer_team,
         'high_score': week_high_score,
@@ -615,6 +765,33 @@ def build_email_html(stats, ai_html):
         </tr>
         """
 
+    power_rankings_rows = ""
+    for idx, team in enumerate(stats.get('power_rankings', [])):
+        diff = team.get('diff', 0)
+        has_prev = team.get('has_prev', False)
+        if has_prev:
+            if diff > 0:
+                change_html = f'<span style="color: #2ea043; font-weight: 700; font-size: 11px; margin-left: 4px;">&#9650;{diff}</span>'
+            elif diff < 0:
+                change_html = f'<span style="color: #cf222e; font-weight: 700; font-size: 11px; margin-left: 4px;">&#9660;{abs(diff)}</span>'
+            else:
+                change_html = '<span style="color: #728078; font-weight: 600; font-size: 11px; margin-left: 4px;">&mdash;</span>'
+        else:
+            change_html = '<span style="color: #728078; font-weight: 600; font-size: 11px; margin-left: 4px;">&mdash;</span>'
+
+        tot_pts = team['total_pts']
+        pts_str = f"{int(tot_pts)}" if tot_pts == int(tot_pts) else f"{tot_pts:.1f}"
+
+        power_rankings_rows += f"""
+        <tr>
+          <td style="padding: 8px 4px; border-bottom: 1px solid rgba(156, 120, 54, 0.2); font-weight: 700; color: #725624; white-space: nowrap;">{team['rank']} {change_html}</td>
+          <td style="padding: 8px 4px; border-bottom: 1px solid rgba(156, 120, 54, 0.2); font-weight: 600; color: #0f1f18;">{team['name']}</td>
+          <td style="padding: 8px 4px; border-bottom: 1px solid rgba(156, 120, 54, 0.2); text-align: center; color: #1a2e24;">{team['record']}</td>
+          <td style="padding: 8px 4px; border-bottom: 1px solid rgba(156, 120, 54, 0.2); text-align: right; color: #1a2e24;">{team['pf']:.1f}</td>
+          <td style="padding: 8px 4px; border-bottom: 1px solid rgba(156, 120, 54, 0.2); text-align: right; font-weight: 700; color: #112019;">{pts_str}</td>
+        </tr>
+        """
+
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -715,6 +892,30 @@ def build_email_html(stats, ai_html):
         </thead>
         <tbody>
           {standings_rows}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Power Rankings Table -->
+    <div style="color: #d6a75c; font-size: 13px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; margin: 28px 0 12px 4px;">
+      POWER RANKINGS
+    </div>
+    <div style="background-color: #cde8da; border-left: 5px solid #9c7836; border-radius: 12px; padding: 18px 22px; margin-bottom: 22px;">
+      <div style="color: #725624; font-size: 13px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px;">
+        WEEK {stats['week']} POWER RANKINGS
+      </div>
+      <table style="width: 100%; border-collapse: collapse; color: #1a2e24; font-size: 14px;">
+        <thead>
+          <tr style="border-bottom: 2px solid #9c7836; text-align: left;">
+            <th style="padding: 8px 4px; color: #725624; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">#</th>
+            <th style="padding: 8px 4px; color: #725624; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Team</th>
+            <th style="padding: 8px 4px; color: #725624; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; text-align: center;">Record</th>
+            <th style="padding: 8px 4px; color: #725624; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; text-align: right;">PF</th>
+            <th style="padding: 8px 4px; color: #725624; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; text-align: right;">Power Pts</th>
+          </tr>
+        </thead>
+        <tbody>
+          {power_rankings_rows}
         </tbody>
       </table>
     </div>
