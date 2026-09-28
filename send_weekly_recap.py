@@ -786,8 +786,6 @@ def build_email_html(stats, ai_html):
         <tr>
           <td style="padding: 8px 4px; border-bottom: 1px solid rgba(156, 120, 54, 0.2); font-weight: 700; color: #725624; white-space: nowrap;">{team['rank']} {change_html}</td>
           <td style="padding: 8px 4px; border-bottom: 1px solid rgba(156, 120, 54, 0.2); font-weight: 600; color: #0f1f18;">{team['name']}</td>
-          <td style="padding: 8px 4px; border-bottom: 1px solid rgba(156, 120, 54, 0.2); text-align: center; color: #1a2e24;">{team['record']}</td>
-          <td style="padding: 8px 4px; border-bottom: 1px solid rgba(156, 120, 54, 0.2); text-align: right; color: #1a2e24;">{team['pf']:.1f}</td>
           <td style="padding: 8px 4px; border-bottom: 1px solid rgba(156, 120, 54, 0.2); text-align: right; font-weight: 700; color: #112019;">{pts_str}</td>
         </tr>
         """
@@ -909,8 +907,6 @@ def build_email_html(stats, ai_html):
           <tr style="border-bottom: 2px solid #9c7836; text-align: left;">
             <th style="padding: 8px 4px; color: #725624; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">#</th>
             <th style="padding: 8px 4px; color: #725624; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Team</th>
-            <th style="padding: 8px 4px; color: #725624; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; text-align: center;">Record</th>
-            <th style="padding: 8px 4px; color: #725624; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; text-align: right;">PF</th>
             <th style="padding: 8px 4px; color: #725624; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; text-align: right;">Power Pts</th>
           </tr>
         </thead>
