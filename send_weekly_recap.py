@@ -7,6 +7,7 @@ from email.mime.text import MIMEText
 from dotenv import load_dotenv
 import google.generativeai as genai
 import html
+import re
 
 load_dotenv()
 
@@ -715,9 +716,9 @@ def generate_summary_with_ai(stats):
     1. Card: "THE OPENING SALVO" (or "WEEK {stats['week']} HEADLINER"): 1-2 punchy paragraphs capturing the theme of the week, surprising blowouts, and standout highs.
     2. Card: "THE WOODEN SPOON DEBATE": Roast the lowest scoring team or the most embarrassing blowout of the week. Reference their career stats or blowout losses from the career data provided.
     3. Standalone Heading: <div style="color: #d6a75c; font-size: 13px; font-weight: 800; letter-spacing: 2.5px; text-transform: uppercase; margin: 32px 0 14px 4px;">GRUDGES TO SETTLE</div>
-    4. Card: "RIVALRIES & CLOSE SHAVES": Highlight the nail-biters and rivalry matchups. Mention their all_time_h2h records.
+    4. Card: "RIVALRIES & CLOSE SHAVES": Highlight the nail-biters and rivalry matchups. Weave in their all-time rivalry history naturally.
     5. Card: "BENCH REGRETS & NIGHTMARES": Roast any manager who left game-changing points on their bench.
-    6. Card: "MATCHUP SPOTLIGHTS": Quick 1-2 sentence analytical roasts/praise for the remaining matchups.
+    6. Card: "MATCHUP SPOTLIGHTS": Quick 1-2 sentence analytical roasts/praise for the remaining matchups, naturally blending in historical context or standout performances.
     7. Card: "THE DAVID HAKALO LUCK REPORT" (MANDATORY — include EVERY single week, no exceptions): Write a creative, funny 2-3 sentence roast specifically about how lucky David Hakalo is at fantasy football. This must ALWAYS appear regardless of whether David won or lost this week. Use a fresh angle each time — some ideas:
        - If David won: how he probably stumbled into it, got bailed out by a garbage-time score, a kicker, or his opponent's star player getting hurt at the worst moment.
        - If David lost: even in defeat, highlight some absurd lucky element — maybe he still scored more than he deserved, or his bench somehow outscored his starters.
@@ -725,8 +726,16 @@ def generate_summary_with_ai(stats):
        - Get creative with the framing each week — "David's luck is so strong he probably found a $20 in his pocket after losing." Give it a different comedic voice every week. Never repeat the same joke structure.
        Use this week's matchup data AND the career stats provided to ground the roast in real numbers.
 
-    CRITICAL INSTRUCTION ON ALL-TIME H2H RECORDS:
-    The 'all_time_h2h' string provided in each matchup's data ALREADY includes this week's outcome (e.g., if Jack lost to Jamie this week, 'all_time_h2h' is already updated to 'Jack leads 6-4'). You MUST quote this exact record verbatim when mentioning head-to-head records in any section (such as RIVALRIES & CLOSE SHAVES or MATCHUP SPOTLIGHTS). Do NOT adjust the numbers or do your own addition.
+    CRITICAL RULE FOR ALL-TIME HEAD-TO-HEAD RECORDS:
+    - The 'all_time_h2h' string provided in each matchup's data (e.g. 'Jack leads 6-4', 'Gregory leads 14-6', 'Tied 4-4') ALREADY includes this week's outcome.
+    - NEVER put quotation marks around the record and NEVER paste it robotically like "Jack leads 6-4" or "Blair leads 9-8".
+    - You MUST weave the series record into the sentence fluidly and conversationally like a sharp sports writer.
+      Good examples:
+      * "With the win, Jamie chipped away at Jack's series lead, which now sits at 6-4..."
+      * "Gregory padded his dominant historical record over Thomas to 14-6..."
+      * "David and Michael find themselves knotted up in a 4-4 all-time deadlock..."
+      * "Blair still clings to a razor-thin 9-8 historical edge over Gary despite this week's loss..."
+    - Use the exact win-loss numbers from 'all_time_h2h', but make the wording flow completely naturally.
 
     Do NOT include Markdown wrappers like ```html or ```. Output raw HTML snippets only. Do NOT include standings or raw scoreboard, those are added separately.
     """
@@ -741,6 +750,7 @@ def generate_summary_with_ai(stats):
             text = text[3:]
         if text.endswith("```"):
             text = text[:-3]
+        text = re.sub(r'\*\*(.*?)\*\*', r'<strong style="color: #0f1f18;">\1</strong>', text)
         return text.strip()
     except Exception as e:
         print(f"Error calling Gemini API: {e}")
