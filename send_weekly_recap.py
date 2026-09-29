@@ -718,7 +718,9 @@ def generate_summary_with_ai(stats):
     3. Standalone Heading: <div style="color: #d6a75c; font-size: 13px; font-weight: 800; letter-spacing: 2.5px; text-transform: uppercase; margin: 32px 0 14px 4px;">GRUDGES TO SETTLE</div>
     4. Card: "RIVALRIES & CLOSE SHAVES": Highlight the nail-biters and rivalry matchups. Weave in their all-time rivalry history naturally.
     5. Card: "BENCH REGRETS & NIGHTMARES": Roast any manager who left game-changing points on their bench.
-    6. Card: "MATCHUP SPOTLIGHTS": Quick 1-2 sentence analytical roasts/praise for each of the remaining matchups. Conversationally weave in their rivalry history or matchup storylines (never list or quote records robotically).
+    6. Card: "MATCHUP SPOTLIGHTS": Quick 1-2 sentence analytical roasts/praise for each of the remaining matchups.
+       - Always format matchup headers cleanly with "vs." (e.g. <strong>Gregory vs. Thomas:</strong>). NEVER use tennis/sports-wire shorthand like "d." or "def." for defeated; always use "vs." for matchup headings.
+       - Conversationally weave in their rivalry history or matchup storylines (never list or quote records robotically).
     7. Card: "THE DAVID HAKALO LUCK REPORT" (MANDATORY — include EVERY single week, no exceptions): Write a creative, funny 2-3 sentence roast specifically about how lucky David Hakalo is at fantasy football. This must ALWAYS appear regardless of whether David won or lost this week. Use a fresh angle each time — some ideas:
        - If David won: how he probably stumbled into it, got bailed out by a garbage-time score, a kicker, or his opponent's star player getting hurt at the worst moment.
        - If David lost: even in defeat, highlight some absurd lucky element — maybe he still scored more than he deserved, or his bench somehow outscored his starters.
@@ -751,6 +753,8 @@ def generate_summary_with_ai(stats):
             text = text[3:]
         if text.endswith("```"):
             text = text[:-3]
+        # Replace sports-wire shorthand " d. " or " def. " (for defeated) with " vs. "
+        text = re.sub(r'\b([A-Z][a-z0-9]+(?:\s+[A-Z][a-z0-9]+)?)\s+(?:d\.|def\.)\s+([A-Z][a-z0-9]+(?:\s+[A-Z][a-z0-9]+)?)\b', r'\1 vs. \2', text)
         # Strip stray quotation marks around H2H records (e.g. "Blair leads 9-8" -> Blair leads 9-8)
         text = re.sub(r'(?<!=)[\"“\u201c\u201d]([A-Za-z\s]*(?:leads|lead|tied|trails|trail|deadlocked)\s+\d+-\d+(?:-\d+)?)[\"”\u201c\u201d]', r'\1', text, flags=re.IGNORECASE)
         text = re.sub(r'\*\*(.*?)\*\*', r'<strong style="color: #0f1f18;">\1</strong>', text)
