@@ -21,6 +21,8 @@ ctx = ssl.create_default_context()
 ctx.check_hostname = False
 ctx.verify_mode = ssl.CERT_NONE
 
+latest_2026_payload = None
+
 with open("data.js", "w") as f:
     f.write("const localLeagueData = {\n")
     
@@ -52,6 +54,8 @@ with open("data.js", "w") as f:
                 content = response.read().decode('utf-8')
                 data = json.loads(content)
                 payload = data[0] if isinstance(data, list) and len(data) > 0 else data
+                if year == 2026:
+                    latest_2026_payload = payload
                 
                 f.write(f'"{year}": {json.dumps(payload)}')
                 if idx != 15:
@@ -84,6 +88,8 @@ with open("data.js", "w") as f:
 
                             data = json.loads(content)
                             payload = data[0] if isinstance(data, list) and len(data) > 0 else data
+                            if year == 2026:
+                                latest_2026_payload = payload
                             f.write(f'"{year}": {json.dumps(payload)}')
                             if idx != 15:
                                 f.write(",\n")
@@ -111,11 +117,23 @@ with open("data.js", "w") as f:
     f.write("\n};\n")
 print("Done writing data.js")
 
-def get_optimal_score(roster_entries, slot_limits):
+def get_player_points_for_week(entry, week):
+    player = entry.get('playerPoolEntry', {}).get('player', {})
+    for stat in player.get('stats', []):
+        if stat.get('scoringPeriodId') == week and stat.get('statSourceId') == 0:
+            return stat.get('appliedTotal', 0.0)
+    for stat in entry.get('stats', []):
+        if stat.get('scoringPeriodId') == week and stat.get('statSourceId') == 0:
+            return stat.get('appliedTotal', 0.0)
+    if week == 1:
+        return entry.get('playerPoolEntry', {}).get('appliedStatTotal', 0.0)
+    return 0.0
+
+def get_optimal_score(roster_entries, slot_limits, week):
     players = []
     for entry in roster_entries:
         player_info = entry.get('playerPoolEntry', {})
-        points = player_info.get('appliedStatTotal', 0)
+        points = get_player_points_for_week(entry, week)
         eligible_slots = player_info.get('player', {}).get('eligibleSlots', [])
         players.append({'points': points, 'slots': eligible_slots})
     
@@ -129,7 +147,7 @@ def get_optimal_score(roster_entries, slot_limits):
             active_slots[slot_id] = limit
             filled_slots[slot_id] = 0
             
-    total_score = 0
+    total_score = 0.0
     for p in players:
         sorted_slots = sorted(p['slots'], key=lambda s: (s >= 20, s)) 
         for slot in sorted_slots:
@@ -137,7 +155,7 @@ def get_optimal_score(roster_entries, slot_limits):
                 filled_slots[slot] += 1
                 total_score += p['points']
                 break
-    return total_score
+    return round(total_score, 2)
 
 print("Fetching optimal scores for 2026...")
 optimal_scores = {}
@@ -150,7 +168,18 @@ try:
         current_week = settings_data.get('status', {}).get('latestScoringPeriod', 1)
         slot_limits = settings_data.get('settings', {}).get('rosterSettings', {}).get('lineupSlotCounts', {})
 
-    for week in range(1, current_week + 1):
+    completed_weeks = []
+    if latest_2026_payload:
+        schedule = latest_2026_payload.get('schedule', [])
+        completed_weeks = sorted(list(set(
+            m.get('matchupPeriodId') 
+            for m in schedule 
+            if m.get('winner') in ['HOME', 'AWAY', 'TIE']
+        )))
+    if not completed_weeks:
+        completed_weeks = list(range(1, current_week + 1))
+
+    for week in completed_weeks:
         optimal_scores[week] = {}
         url_roster = f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/2026/segments/0/leagues/{league_id}?view=mRoster&scoringPeriodId={week}"
         req_roster = urllib.request.Request(url_roster, headers=headers)
@@ -158,7 +187,7 @@ try:
             roster_data = json.loads(res.read().decode('utf-8'))
             for team in roster_data.get('teams', []):
                 roster = team.get('roster', {}).get('entries', [])
-                opt_score = get_optimal_score(roster, slot_limits)
+                opt_score = get_optimal_score(roster, slot_limits, week)
                 optimal_scores[week][team['id']] = opt_score
         print(f"Optimal scores for week {week} calculated.")
 except Exception as e:
