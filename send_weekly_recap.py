@@ -232,6 +232,7 @@ def get_historical_context():
         
         for year, ydata in history.items():
             if not ydata: continue
+            if str(year) == str(SEASON): continue
             members = {m['id']: normalize_owner_name(f"{m.get('firstName', '')} {m.get('lastName', '')}") for m in ydata.get('members', [])}
             teams = {}
             for t in ydata.get('teams', []):
@@ -453,6 +454,58 @@ def process_data(data):
         }
 
     career_stats, h2h_records = get_historical_context()
+
+    # Ensure career_stats has entries for all current season owners
+    for t in teams.values():
+        first = t['name']
+        if first not in career_stats and first != 'Unknown':
+            career_stats[first] = {'name': first, 'wins': 0, 'losses': 0, 'ties': 0, 'blowouts_30plus': 0}
+
+    # Add all current season completed games up to and including this week (matchup_period)
+    for g in data.get('schedule', []):
+        if g.get('playoffTierType', 'NONE') != 'NONE':
+            continue
+        wk = g.get('matchupPeriodId', 0)
+        if wk > matchup_period:
+            continue
+        home = g.get('home', {})
+        away = g.get('away', {})
+        if not home or not away:
+            continue
+        hid = home.get('teamId')
+        aid = away.get('teamId')
+        h = teams.get(hid, {}).get('name')
+        a = teams.get(aid, {}).get('name')
+        if not h or not a or h == 'Unknown' or a == 'Unknown':
+            continue
+
+        hs = home.get('totalPoints') if home.get('totalPoints') is not None else home.get('totalPointsLive', 0.0)
+        as_ = away.get('totalPoints') if away.get('totalPoints') is not None else away.get('totalPointsLive', 0.0)
+        if hs == 0 and as_ == 0 and g.get('winner') == 'UNDECIDED':
+            continue
+
+        pair = tuple(sorted([h, a]))
+        if pair not in h2h_records:
+            h2h_records[pair] = {h: 0, a: 0, 'ties': 0}
+        if h not in h2h_records[pair]: h2h_records[pair][h] = 0
+        if a not in h2h_records[pair]: h2h_records[pair][a] = 0
+
+        hw = g.get('winner') == 'HOME'
+        aw = g.get('winner') == 'AWAY'
+        if hw or (g.get('winner') not in ['AWAY', 'TIE'] and hs > as_):
+            career_stats[h]['wins'] += 1
+            career_stats[a]['losses'] += 1
+            h2h_records[pair][h] += 1
+            if hs - as_ >= 30: career_stats[a]['blowouts_30plus'] += 1
+        elif aw or (g.get('winner') not in ['HOME', 'TIE'] and as_ > hs):
+            career_stats[a]['wins'] += 1
+            career_stats[h]['losses'] += 1
+            h2h_records[pair][a] += 1
+            if as_ - hs >= 30: career_stats[h]['blowouts_30plus'] += 1
+        else:
+            career_stats[h]['ties'] += 1
+            career_stats[a]['ties'] += 1
+            h2h_records[pair]['ties'] += 1
     current_season_optimal = get_current_season_optimal()
     week_opt_data = current_season_optimal.get(str(matchup_period), {})
     week_rosters = get_week_rosters(matchup_period)
@@ -671,6 +724,9 @@ def generate_summary_with_ai(stats):
        - Reference his career record, blowout losses suffered, or all-time H2H dominance as evidence of either dumb luck or cosmic blessing.
        - Get creative with the framing each week — "David's luck is so strong he probably found a $20 in his pocket after losing." Give it a different comedic voice every week. Never repeat the same joke structure.
        Use this week's matchup data AND the career stats provided to ground the roast in real numbers.
+
+    CRITICAL INSTRUCTION ON ALL-TIME H2H RECORDS:
+    The 'all_time_h2h' string provided in each matchup's data ALREADY includes this week's outcome (e.g., if Jack lost to Jamie this week, 'all_time_h2h' is already updated to 'Jack leads 6-4'). You MUST quote this exact record verbatim when mentioning head-to-head records in any section (such as RIVALRIES & CLOSE SHAVES or MATCHUP SPOTLIGHTS). Do NOT adjust the numbers or do your own addition.
 
     Do NOT include Markdown wrappers like ```html or ```. Output raw HTML snippets only. Do NOT include standings or raw scoreboard, those are added separately.
     """
