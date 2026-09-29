@@ -1,9 +1,6 @@
 name: Send Weekly Fantasy Recap Email
 
 on:
-  schedule:
-    # Runs at 12:35 UTC (8:35 AM EDT / 7:35 AM EST) every Tuesday
-    - cron: '35 12 * * 2'
   workflow_dispatch:
     inputs:
       test_week:
