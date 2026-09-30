@@ -7,6 +7,7 @@ from email.mime.text import MIMEText
 from dotenv import load_dotenv
 import google.generativeai as genai
 import html
+import re
 
 load_dotenv()
 
@@ -361,6 +362,7 @@ def generate_summary_with_ai(stats):
             text = text[3:]
         if text.endswith("```"):
             text = text[:-3]
+        text = re.sub(r'\*\*(.*?)\*\*', r'<strong style="color: #0f1f18;">\1</strong>', text)
         return text.strip()
     except Exception as e:
         print(f"Error calling Gemini API: {e}")
