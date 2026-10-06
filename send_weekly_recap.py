@@ -696,8 +696,13 @@ def process_data(data):
             home_roster = week_rosters.get(home_team_id, [])
             away_roster = week_rosters.get(away_team_id, [])
 
-            home_optimal = get_optimal_score(home_roster, slot_limits, matchup_period)
-            away_optimal = get_optimal_score(away_roster, slot_limits, matchup_period)
+            home_optimal = week_opt_data.get(str(home_team_id)) or week_opt_data.get(home_team_id)
+            if not home_optimal:
+                home_optimal = get_optimal_score(home_roster, slot_limits, matchup_period)
+
+            away_optimal = week_opt_data.get(str(away_team_id)) or week_opt_data.get(away_team_id)
+            if not away_optimal:
+                away_optimal = get_optimal_score(away_roster, slot_limits, matchup_period)
 
             home_highlights = get_roster_highlights(home_roster, matchup_period)
             away_highlights = get_roster_highlights(away_roster, matchup_period)
