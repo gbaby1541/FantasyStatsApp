@@ -422,6 +422,132 @@ def get_power_rankings_with_changes(data, teams_meta, current_week):
         })
     return results
 
+def compute_historical_milestones(matchup_period, current_standings):
+    """
+    Computes historical league milestones through matchup_period across all completed seasons (2011 to SEASON-1).
+    For each record bracket present in current_standings (e.g. 4-0, 3-1, 0-4):
+      - How many historical teams started with that record
+      - What percentage made the playoffs (top 6 seeds / winners bracket)
+      - What percentage won the championship
+      - Notable anomalies (undefeated teams that missed playoffs, winless teams that made playoffs)
+    """
+    try:
+        with open('data.js', 'r') as f:
+            content = f.read()
+        start = content.find('{')
+        end = content.find('};\n\nconst currentSeasonOptimal')
+        if end == -1: end = content.find('};')
+        json_str = content[start:end+1]
+        history = json.loads(json_str)
+        
+        milestones = {}
+        collapsed = []
+        miracles = []
+
+        for year in sorted(history.keys()):
+            if int(year) >= int(SEASON):
+                continue
+            ydata = history[year]
+            teams = {t['id']: t for t in ydata.get('teams', [])}
+            members = {m['id']: normalize_owner_name(f"{m.get('firstName', '')} {m.get('lastName', '')}") for m in ydata.get('members', [])}
+            
+            winners_bracket = set()
+            for g in ydata.get('schedule', []):
+                if g.get('playoffTierType') == 'WINNERS_BRACKET':
+                    if g.get('home'): winners_bracket.add(g['home']['teamId'])
+                    if g.get('away'): winners_bracket.add(g['away']['teamId'])
+                    
+            team_records = {tid: {'wins': 0, 'losses': 0, 'ties': 0} for tid in teams}
+            for g in ydata.get('schedule', []):
+                if g.get('playoffTierType', 'NONE') != 'NONE':
+                    continue
+                if g.get('matchupPeriodId', 0) > matchup_period:
+                    continue
+                if g.get('winner') == 'UNDECIDED':
+                    continue
+                hid = g.get('home', {}).get('teamId')
+                aid = g.get('away', {}).get('teamId')
+                if not hid or not aid:
+                    continue
+                hs = g.get('home', {}).get('totalPoints', 0)
+                as_ = g.get('away', {}).get('totalPoints', 0)
+                hw = g.get('winner') == 'HOME'
+                aw = g.get('winner') == 'AWAY'
+                if hw or hs > as_:
+                    team_records[hid]['wins'] += 1
+                    team_records[aid]['losses'] += 1
+                elif aw or as_ > hs:
+                    team_records[aid]['wins'] += 1
+                    team_records[hid]['losses'] += 1
+                else:
+                    team_records[hid]['ties'] += 1
+                    team_records[aid]['ties'] += 1
+                    
+            for tid, rec in team_records.items():
+                key = f"{rec['wins']}-{rec['losses']}"
+                if rec['ties'] > 0:
+                    key += f"-{rec['ties']}"
+                if key not in milestones:
+                    milestones[key] = {'total': 0, 'playoffs': 0, 'champs': 0}
+                milestones[key]['total'] += 1
+                t_obj = teams.get(tid, {})
+                made_po = (tid in winners_bracket) or (t_obj.get('playoffSeed', 99) <= 6)
+                if made_po:
+                    milestones[key]['playoffs'] += 1
+                is_champ = t_obj.get('rankCalculatedFinal', t_obj.get('rankFinal', 99)) == 1
+                if is_champ:
+                    milestones[key]['champs'] += 1
+
+                owner_id = t_obj.get('owners', [None])[0] if t_obj.get('owners') else None
+                owner = members.get(owner_id, t_obj.get('name', 'Unknown'))
+                first = owner.split()[0] if owner else 'Unknown'
+                # Check for notable anomalies
+                if rec['losses'] == 0 and rec['wins'] == matchup_period and not made_po:
+                    collapsed.append(f"{first} in {year} ({rec['wins']}-0 start, missed playoffs as #{t_obj.get('playoffSeed', '?')})")
+                if rec['wins'] == 0 and rec['losses'] == matchup_period and made_po:
+                    miracles.append(f"{first} in {year} (0-{rec['losses']} start, made playoffs as #{t_obj.get('playoffSeed', '?')})")
+
+        # Group current teams by record
+        records_map = {}
+        for t in current_standings:
+            key = f"{t['wins']}-{t['losses']}"
+            if t.get('ties', 0) > 0:
+                key += f"-{t['ties']}"
+            if key not in records_map:
+                records_map[key] = []
+            records_map[key].append(t['name'])
+
+        records_list = []
+        for key in sorted(records_map.keys(), key=lambda k: (-int(k.split('-')[0]), int(k.split('-')[1]))):
+            hist = milestones.get(key, {'total': 0, 'playoffs': 0, 'champs': 0})
+            total = hist['total']
+            po_pct = round((hist['playoffs'] / total * 100), 1) if total > 0 else 0.0
+            champ_pct = round((hist['champs'] / total * 100), 1) if total > 0 else 0.0
+            records_list.append({
+                'record': key,
+                'current_teams': records_map[key],
+                'historical_starts': total,
+                'playoffs_count': hist['playoffs'],
+                'playoff_pct': po_pct,
+                'champs_count': hist['champs'],
+                'champ_pct': champ_pct
+            })
+
+        notes = []
+        if collapsed:
+            notes.append(f"Sole undefeated team to miss playoffs after a {matchup_period}-0 start: {', '.join(collapsed)}.")
+        if miracles:
+            notes.append(f"Sole winless team to make playoffs after an 0-{matchup_period} start: {', '.join(miracles)}.")
+
+        return {
+            'records': records_list,
+            'notes': notes,
+            'total_seasons': 15
+        }
+    except Exception as e:
+        print(f"Error computing historical milestones: {e}")
+        return {'records': [], 'notes': [], 'total_seasons': 0}
+
 def process_data(data):
     # Determine the week that just finished
     if TEST_WEEK:
@@ -654,12 +780,16 @@ def process_data(data):
     # Calculate power rankings with week-over-week changes
     power_rankings = get_power_rankings_with_changes(data, teams, matchup_period)
 
+    # Calculate historical record milestones and playoff odds
+    historical_milestones = compute_historical_milestones(matchup_period, standings)
+
     print(f"FINAL: top_player='{top_player}' top_player_score={top_player_score} best_waiver='{best_waiver_player}' best_waiver_score={best_waiver_score}")
     return {
         'week': matchup_period,
         'matchups': matchups,
         'standings': standings,
         'power_rankings': power_rankings,
+        'historical_milestones': historical_milestones,
         'career_stats': career_stats,
         'high_scorer_team': high_scorer_team,
         'high_score': week_high_score,
@@ -694,6 +824,9 @@ def generate_summary_with_ai(stats):
     Career Regular Season Records & 30+ Point Blowouts Suffered:
     {json.dumps(stats.get('career_stats', {}), indent=2)}
 
+    Historical Record Milestones & Playoff Rates (Through Week {stats['week']} across all 15 completed seasons, 2011-2025):
+    {json.dumps(stats.get('historical_milestones', {}), indent=2)}
+
     Weekly Superlatives:
     - High Scorer: {stats['high_scorer_team']} ({stats['high_score']:.2f} pts)
     - Top Individual Player: {stats['top_player']} ({stats['top_player_score']:.2f} pts)
@@ -727,6 +860,10 @@ def generate_summary_with_ai(stats):
        - Reference his career record, blowout losses suffered, or all-time H2H dominance as evidence of either dumb luck or cosmic blessing.
        - Get creative with the framing each week — "David's luck is so strong he probably found a $20 in his pocket after losing." Give it a different comedic voice every week. Never repeat the same joke structure.
        Use this week's matchup data AND the career stats provided to ground the roast in real numbers.
+    8. Card: "WHAT HISTORY SAYS: PLAYOFF PROJECTIONS": Break down what 15 seasons of league history (2011–2025, 180 total team-seasons) say about where managers stand based on their current records through Week {stats['week']}.
+       - Use the exact numbers from the Historical Record Milestones provided.
+       - Highlight the historical playoff and championship odds for the undefeated teams, winless teams, and the middle-tier battle.
+       - Reference any historical cautionary tales (like 2019 Dan Brunette missing the playoffs after a 4-0 start) or miracle comebacks (like 2013 Tom Crane rallying from 0-4 to the #3 seed) from the notes.
 
     CRITICAL RULE FOR ALL-TIME HEAD-TO-HEAD RECORDS:
     - The 'all_time_h2h' string provided in each matchup's data (e.g. 'Jack leads 6-4', 'Gregory leads 14-6', 'Tied 4-4') ALREADY includes this week's outcome.
@@ -863,6 +1000,68 @@ def build_email_html(stats, ai_html):
         </tr>
         """
 
+    # Historical milestones table rows
+    historical_milestone_rows = ""
+    for item in stats.get('historical_milestones', {}).get('records', []):
+        teams_str = ", ".join(item['current_teams'])
+        po_color = "#137333" if item['playoff_pct'] >= 70 else ("#b06000" if item['playoff_pct'] >= 40 else "#c5221f")
+        historical_milestone_rows += f"""
+        <tr style="border-bottom: 1px solid rgba(156, 120, 54, 0.2);">
+          <td style="padding: 8px 4px; font-weight: 800; color: #0f1f18;">{item['record']}</td>
+          <td style="padding: 8px 4px; font-weight: 600; color: #1a2e24;">{teams_str}</td>
+          <td style="padding: 8px 4px; text-align: center; color: #725624;">{item['historical_starts']}</td>
+          <td style="padding: 8px 4px; text-align: right; font-weight: 700; color: {po_color};">{item['playoff_pct']:.1f}% <span style="font-size: 11px; font-weight: 400; color: #4a5d52;">({item['playoffs_count']}/{item['historical_starts']})</span></td>
+          <td style="padding: 8px 4px; text-align: right; font-weight: 700; color: #0f1f18;">{item['champ_pct']:.1f}% <span style="font-size: 11px; font-weight: 400; color: #4a5d52;">({item['champs_count']})</span></td>
+        </tr>
+        """
+
+    historical_notes = stats.get('historical_milestones', {}).get('notes', [])
+    historical_notes_html = ""
+    if historical_notes:
+        notes_items = "".join([f"<li style='margin-bottom: 4px;'>{n}</li>" for n in historical_notes])
+        historical_notes_html = f"""
+        <div style="margin-top: 14px; padding-top: 10px; border-top: 1px dashed rgba(156, 120, 54, 0.4); font-size: 12px; color: #5c4314;">
+          <strong style="color: #725624;">Historical Lore &amp; Cautionary Tales:</strong>
+          <ul style="margin: 6px 0 0 0; padding-left: 18px; line-height: 1.45;">
+            {notes_items}
+          </ul>
+        </div>
+        """
+
+    historical_card = ""
+    if stats.get('historical_milestones', {}).get('records'):
+        historical_card = f"""
+    <!-- Historical Benchmarks & Playoff Odds -->
+    <div style="color: #d6a75c; font-size: 13px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; margin: 28px 0 12px 4px;">
+      HISTORICAL BENCHMARKS &amp; PLAYOFF ODDS
+    </div>
+    <div style="background-color: #cde8da; border-left: 5px solid #9c7836; border-radius: 12px; padding: 18px 22px; margin-bottom: 22px;">
+      <div style="color: #725624; font-size: 13px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 6px;">
+        WHAT 15 YEARS OF HISTORY SAYS (WEEK {stats['week']} STARTS)
+      </div>
+      <p style="color: #1a2e24; font-size: 13px; line-height: 1.5; margin: 0 0 14px 0;">
+        Based on all 180 team-seasons from 2011&ndash;2025. Exactly 6 teams reach the playoffs each season.
+      </p>
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse; color: #1a2e24; font-size: 14px;">
+          <thead>
+            <tr style="border-bottom: 2px solid #9c7836; text-align: left;">
+              <th style="padding: 8px 4px; color: #725624; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Start</th>
+              <th style="padding: 8px 4px; color: #725624; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">2026 Teams</th>
+              <th style="padding: 8px 4px; color: #725624; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; text-align: center;">Hist.</th>
+              <th style="padding: 8px 4px; color: #725624; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; text-align: right;">Playoff %</th>
+              <th style="padding: 8px 4px; color: #725624; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; text-align: right;">Title %</th>
+            </tr>
+          </thead>
+          <tbody>
+            {historical_milestone_rows}
+          </tbody>
+        </table>
+      </div>
+      {historical_notes_html}
+    </div>
+"""
+
     html = f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -988,6 +1187,8 @@ def build_email_html(stats, ai_html):
         </tbody>
       </table>
     </div>
+
+    {historical_card}
 
 
 
