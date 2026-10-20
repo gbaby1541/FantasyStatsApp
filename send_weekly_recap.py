@@ -54,27 +54,36 @@ def get_espn_data():
     return response.json()
 
 def get_week_rosters(matchup_period):
-    """Fetch per-week roster data by passing scoringPeriodId explicitly."""
+    """Fetch per-week roster data with full starters and bench entries."""
     cookies = {}
     if ESPN_S2: cookies['espn_s2'] = ESPN_S2
     if SWID: cookies['swid'] = SWID
 
-    # Use the full set of views (same as main data call) + explicit scoringPeriodId
+    # Directly fetch mRoster view with explicit scoringPeriodId to get all 13-16 roster entries (starters + bench)
     url = (f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{SEASON}"
-           f"/segments/0/leagues/{LEAGUE_ID}"
-           f"?view=mMatchupScore&view=mTeam&view=mRoster&view=mSettings&view=mMatchup"
-           f"&scoringPeriodId={matchup_period}")
+           f"/segments/0/leagues/{LEAGUE_ID}?view=mRoster&scoringPeriodId={matchup_period}")
     try:
         response = requests.get(url, cookies=cookies)
         print(f"get_week_rosters: HTTP {response.status_code} for period {matchup_period}")
         if response.status_code == 200:
             data = response.json()
-            schedule = data.get('schedule', [])
-            print(f"get_week_rosters: {len(schedule)} total games in schedule")
-            # Log what matchupPeriodIds we see
-            periods_seen = set(g.get('matchupPeriodId') for g in schedule[:10])
-            print(f"get_week_rosters: matchupPeriodIds seen: {periods_seen}")
+            rosters = {team['id']: team.get('roster', {}).get('entries', []) for team in data.get('teams', [])}
+            if rosters:
+                print(f"get_week_rosters: loaded full rosters for {len(rosters)} teams (starters + bench) for period {matchup_period}")
+                return rosters
+    except Exception as e:
+        print(f"Error fetching week {matchup_period} rosters (mRoster): {e}")
 
+    # Fallback to schedule view if needed
+    url_sched = (f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{SEASON}"
+                 f"/segments/0/leagues/{LEAGUE_ID}"
+                 f"?view=mMatchupScore&view=mTeam&view=mRoster&view=mSettings&view=mMatchup"
+                 f"&scoringPeriodId={matchup_period}")
+    try:
+        response = requests.get(url_sched, cookies=cookies)
+        if response.status_code == 200:
+            data = response.json()
+            schedule = data.get('schedule', [])
             rosters = {}
             for game in schedule:
                 if game.get('matchupPeriodId') != matchup_period:
@@ -84,63 +93,36 @@ def get_week_rosters(matchup_period):
                     if team_id is None:
                         continue
                     home_obj = game[side]
-                    has_matchup = bool(home_obj.get('rosterForMatchupPeriod', {}).get('entries'))
-                    has_current = bool(home_obj.get('rosterForCurrentScoringPeriod', {}).get('entries'))
                     entries = (
                         home_obj.get('rosterForMatchupPeriod', {}).get('entries', [])
                         or home_obj.get('rosterForCurrentScoringPeriod', {}).get('entries', [])
                     )
-                    print(f"  team {team_id} ({side}): rosterForMatchupPeriod={has_matchup} rosterForCurrentScoringPeriod={has_current} entries={len(entries)}")
                     if entries:
-                        # Log first player's score for sanity
-                        e = entries[0]
-                        pname = e.get('playerPoolEntry', {}).get('player', {}).get('fullName', '?')
-                        pscore = e.get('playerPoolEntry', {}).get('appliedStatTotal', 'N/A')
-                        print(f"    first player: {pname} appliedStatTotal={pscore}")
                         rosters[team_id] = entries
             if rosters:
-                print(f"get_week_rosters: loaded {len(rosters)} teams via schedule view")
+                print(f"get_week_rosters fallback: loaded {len(rosters)} teams via schedule view")
                 return rosters
-            else:
-                print(f"get_week_rosters: schedule view returned 0 teams with rosters — falling back")
     except Exception as e:
-        print(f"Error fetching week {matchup_period} rosters (schedule view): {e}")
-
-    # Fallback: bare mRoster view
-    url_fallback = (f"https://lm-api-reads.fantasy.espn.com/apis/v3/games/ffl/seasons/{SEASON}"
-                    f"/segments/0/leagues/{LEAGUE_ID}?view=mRoster&scoringPeriodId={matchup_period}")
-    try:
-        response = requests.get(url_fallback, cookies=cookies)
-        print(f"get_week_rosters fallback: HTTP {response.status_code}")
-        if response.status_code == 200:
-            data = response.json()
-            result = {team['id']: team.get('roster', {}).get('entries', []) for team in data.get('teams', [])}
-            print(f"get_week_rosters fallback: loaded {len(result)} teams")
-            if result:
-                # Log first player from first team
-                first_team = next(iter(result.values()))
-                if first_team:
-                    e = first_team[0]
-                    pname = e.get('playerPoolEntry', {}).get('player', {}).get('fullName', '?')
-                    pscore = e.get('playerPoolEntry', {}).get('appliedStatTotal', 'N/A')
-                    print(f"  fallback first player: {pname} appliedStatTotal={pscore}")
-            return result
-    except Exception as e:
-        print(f"Error fetching week {matchup_period} rosters (mRoster fallback): {e}")
+        print(f"Error in get_week_rosters fallback: {e}")
     return {}
 
 def get_player_week_points(entry, scoring_period_id=None):
     """Extract the actual fantasy points scored for this specific week.
-    ESPN entry.stats[] contains per-period stat rows; statSourceId=0 means actual (not projected).
-    Falls back to playerPoolEntry.appliedStatTotal only as a last resort.
+    ESPN player stats are under entry['playerPoolEntry']['player']['stats'] and entry.get('stats').
+    statSourceId=0 means actual (not projected).
     """
-    for stat in entry.get('stats', []):
-        if stat.get('statSourceId', -1) == 0:  # 0 = actual scored, 1 = projected
-            # If we know the scoring period, match it; otherwise take the first actual row
+    player = entry.get('playerPoolEntry', {}).get('player', {})
+    for stat in player.get('stats', []):
+        if stat.get('statSourceId', -1) == 0:
             if scoring_period_id is None or stat.get('scoringPeriodId') == scoring_period_id:
-                return stat.get('appliedTotal', 0)
-    # Fallback: some roster views don't include stats[], use appliedStatTotal
-    return entry.get('playerPoolEntry', {}).get('appliedStatTotal', 0)
+                return stat.get('appliedTotal', 0.0)
+    for stat in entry.get('stats', []):
+        if stat.get('statSourceId', -1) == 0:
+            if scoring_period_id is None or stat.get('scoringPeriodId') == scoring_period_id:
+                return stat.get('appliedTotal', 0.0)
+    if scoring_period_id == 1 or scoring_period_id is None:
+        return entry.get('playerPoolEntry', {}).get('appliedStatTotal', 0.0)
+    return 0.0
 
 def get_optimal_score(roster_entries, slot_limits, scoring_period_id=None):
     players = []
@@ -388,13 +370,30 @@ def compute_power_rankings_for_week(data, teams_meta, up_to_week):
     pr_list.sort(key=lambda x: (x['total_pts'], x['pf'], x['w']), reverse=True)
     return pr_list
 
-def get_power_rankings_with_changes(data, teams_meta, current_week):
+def get_ordinal(n):
+    if 11 <= (n % 100) <= 13:
+        suffix = 'th'
+    else:
+        suffix = ['th', 'st', 'nd', 'rd', 'th'][min(n % 10, 4)]
+    return f"{n}{suffix}"
+
+def get_power_rankings_with_changes(data, teams_meta, current_week, historical_milestones=None):
     curr_pr = compute_power_rankings_for_week(data, teams_meta, current_week)
     if not curr_pr:
         return []
 
     prev_pr = compute_power_rankings_for_week(data, teams_meta, current_week - 1)
     prev_rank_map = {t['id']: idx + 1 for idx, t in enumerate(prev_pr)}
+
+    # Map teams to points-for rank
+    sorted_by_pf = sorted(curr_pr, key=lambda x: x['pf'], reverse=True)
+    pf_rank_map = {t['id']: idx + 1 for idx, t in enumerate(sorted_by_pf)}
+
+    # Map record to playoff percentage
+    playoff_map = {}
+    if historical_milestones:
+        for r in historical_milestones.get('records', []):
+            playoff_map[r['record']] = r['playoff_pct']
 
     results = []
     for idx, t in enumerate(curr_pr):
@@ -409,15 +408,28 @@ def get_power_rankings_with_changes(data, teams_meta, current_week):
         if t.get('t', 0) > 0:
             record_str += f"-{t['t']}"
 
+        tid = t['id']
+        t_meta = teams_meta.get(tid, {})
+        team_name = t_meta.get('team_name', t['name'])
+        owner_name = t_meta.get('owner_name', t['name'])
+
+        pf_rank_num = pf_rank_map.get(tid, curr_rank)
+        pf_rank_str = f"{get_ordinal(pf_rank_num)} in points"
+        playoff_pct = playoff_map.get(record_str, 50.0)
+
         results.append({
             'rank': curr_rank,
             'prev_rank': prev_rank,
             'diff': diff,
             'has_prev': (prev_rank is not None and current_week > 1),
-            'id': t['id'],
+            'id': tid,
             'name': t['name'],
+            'team_name': team_name,
+            'owner_name': owner_name,
             'record': record_str,
             'pf': t['pf'],
+            'pf_rank': pf_rank_str,
+            'playoff_pct': playoff_pct,
             'total_pts': t['total_pts']
         })
     return results
@@ -548,6 +560,149 @@ def compute_historical_milestones(matchup_period, current_standings):
         print(f"Error computing historical milestones: {e}")
         return {'records': [], 'notes': [], 'total_seasons': 0}
 
+def compute_weekly_awards(stats_dict, full_rosters, week, teams_map):
+    """
+    Computes the 4 weekly awards matching Screenshot 3:
+    1. 🐶 TOP DOG: Highest scoring team of the week, total score, top player (with points and headshot), new record.
+    2. ☘️ THE LUCKY CHARM AWARD: Lowest scoring winner, how many teams outscored them, who they beat.
+    3. 🚽 SACKO WATCH: Lowest scoring team of the week, score, new record.
+    4. 🪑 BENCHWARMER OF THE WEEK: Highest scoring bench player league-wide (with headshot and team).
+    """
+    matchups = stats_dict.get('matchups', [])
+    
+    # 1. TOP DOG
+    top_dog_team_id = None
+    top_dog_score = stats_dict.get('high_score', 0.0)
+    top_dog_name = stats_dict.get('high_scorer_team', 'Unknown')
+    top_dog_team_name = top_dog_name
+    top_dog_record = ""
+
+    for tid, tinfo in teams_map.items():
+        if tinfo['name'] == top_dog_name or tinfo['team_name'] == top_dog_name:
+            top_dog_team_id = tid
+            top_dog_team_name = tinfo['team_name']
+            rec_str = f"{tinfo['wins']}-{tinfo['losses']}"
+            if tinfo.get('ties', 0) > 0:
+                rec_str += f"-{tinfo['ties']}"
+            top_dog_record = rec_str
+            break
+
+    top_dog_player_name = "Unknown"
+    top_dog_player_pts = 0.0
+    top_dog_player_id = None
+    if top_dog_team_id and top_dog_team_id in full_rosters:
+        for e in full_rosters[top_dog_team_id]:
+            if e.get('lineupSlotId') not in [20, 21, 24]:
+                pts = get_player_week_points(e, week)
+                if pts > top_dog_player_pts:
+                    top_dog_player_pts = pts
+                    p = e.get('playerPoolEntry', {}).get('player', {})
+                    top_dog_player_name = p.get('fullName', 'Unknown')
+                    top_dog_player_id = p.get('id')
+
+    top_dog_headshot = f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{top_dog_player_id}.png&w=96&h=96&cb=1" if top_dog_player_id else None
+
+    # 2. LUCKY CHARM
+    winners = []
+    all_scores = []
+    for m in matchups:
+        h_win = m['winner'] == m['home_team'] or m['winner'] == m.get('home_team_name')
+        w_owner = m['home_team'] if h_win else m['away_team']
+        w_score = m['home_score'] if h_win else m['away_score']
+        l_owner = m['away_team'] if h_win else m['home_team']
+        l_score = m['away_score'] if h_win else m['home_score']
+        w_tname = m.get('home_team_name' if h_win else 'away_team_name', w_owner)
+        l_tname = m.get('away_team_name' if h_win else 'home_team_name', l_owner)
+        winners.append({
+            'winner_owner': w_owner,
+            'winner_team': w_tname,
+            'score': w_score,
+            'loser_owner': l_owner,
+            'loser_team': l_tname,
+            'loser_score': l_score
+        })
+        all_scores.append(m['home_score'])
+        all_scores.append(m['away_score'])
+
+    lowest_winner = min(winners, key=lambda x: x['score']) if winners else {'winner_team': 'None', 'score': 0, 'loser_team': 'None', 'loser_score': 0}
+    num_words = {1: 'one', 2: 'two', 3: 'three', 4: 'four', 5: 'five', 6: 'six', 7: 'seven', 8: 'eight', 9: 'nine', 10: 'ten', 11: 'eleven'}
+    teams_beat_count = sum(1 for s in all_scores if s > lowest_winner['score'])
+    teams_beat_str = num_words.get(teams_beat_count, str(teams_beat_count))
+
+    # 3. SACKO WATCH
+    lowest_score = min(all_scores) if all_scores else 0.0
+    sacko_owner = None
+    sacko_team_name = None
+    sacko_record = ""
+    for m in matchups:
+        if m['home_score'] == lowest_score:
+            sacko_owner = m['home_team']
+            sacko_team_name = m.get('home_team_name', sacko_owner)
+            break
+        elif m['away_score'] == lowest_score:
+            sacko_owner = m['away_team']
+            sacko_team_name = m.get('away_team_name', sacko_owner)
+            break
+
+    for tid, tinfo in teams_map.items():
+        if tinfo['name'] == sacko_owner or tinfo['team_name'] == sacko_team_name:
+            rec_str = f"{tinfo['wins']}-{tinfo['losses']}"
+            if tinfo.get('ties', 0) > 0:
+                rec_str += f"-{tinfo['ties']}"
+            sacko_record = rec_str
+            break
+
+    # 4. BENCHWARMER OF THE WEEK
+    bench_players = []
+    for tid, roster in full_rosters.items():
+        tinfo = teams_map.get(tid, {})
+        for e in roster:
+            if e.get('lineupSlotId') in [20, 21, 24]:
+                p = e.get('playerPoolEntry', {}).get('player', {})
+                pts = get_player_week_points(e, week)
+                bench_players.append({
+                    'team_id': tid,
+                    'team_name': tinfo.get('team_name', tinfo.get('name', 'Unknown')),
+                    'owner_name': tinfo.get('name', 'Unknown'),
+                    'player_name': p.get('fullName', 'Unknown'),
+                    'player_id': p.get('id'),
+                    'points': pts
+                })
+
+    bench_players.sort(key=lambda x: x['points'], reverse=True)
+    top_bench = bench_players[0] if bench_players else None
+
+    bench_headshot = f"https://a.espncdn.com/combiner/i?img=/i/headshots/nfl/players/full/{top_bench['player_id']}.png&w=96&h=96&cb=1" if (top_bench and top_bench.get('player_id')) else None
+
+    return {
+        'top_dog': {
+            'team_name': top_dog_team_name,
+            'score': top_dog_score,
+            'player_name': top_dog_player_name,
+            'player_pts': top_dog_player_pts,
+            'record': top_dog_record,
+            'headshot': top_dog_headshot
+        },
+        'lucky_charm': {
+            'team_name': lowest_winner['winner_team'],
+            'score': lowest_winner['score'],
+            'teams_beat': teams_beat_str,
+            'loser_team': lowest_winner['loser_team'],
+            'loser_score': lowest_winner['loser_score']
+        },
+        'sacko': {
+            'team_name': sacko_team_name or "Unknown",
+            'score': lowest_score,
+            'record': sacko_record
+        },
+        'benchwarmer': {
+            'player_name': top_bench['player_name'] if top_bench else "None",
+            'points': top_bench['points'] if top_bench else 0.0,
+            'team_name': top_bench['team_name'] if top_bench else "Unknown",
+            'headshot': bench_headshot
+        }
+    }
+
 def process_data(data):
     # Determine the week that just finished
     if TEST_WEEK:
@@ -570,9 +725,13 @@ def process_data(data):
         owner_name = normalize_owner_name(owner_name)
         
         first_name = owner_name.split()[0] if owner_name != 'Unknown' else team.get('name', 'Unknown')
+        team_name = team.get('name') or first_name
         
         teams[team['id']] = {
+            'id': team['id'],
             'name': html.escape(first_name),
+            'team_name': html.escape(team_name),
+            'owner_name': html.escape(owner_name),
             'wins': team.get('record', {}).get('overall', {}).get('wins', 0),
             'losses': team.get('record', {}).get('overall', {}).get('losses', 0),
             'ties': team.get('record', {}).get('overall', {}).get('ties', 0),
@@ -727,13 +886,17 @@ def process_data(data):
                 h2h_str += f"-{t_cnt}"
                 
             matchups.append({
+                'home_team_id': home_team_id,
+                'away_team_id': away_team_id,
                 'home_team': h_team_name,
+                'home_team_name': teams.get(home_team_id, {}).get('team_name', h_team_name),
                 'home_score': home_score,
                 'home_optimal': home_optimal,
                 'home_top_player': home_highlights['top_starter'],
                 'home_disappointing_player': home_highlights['worst_starter'],
                 'home_top_bench': home_highlights.get('top_bench'),
                 'away_team': a_team_name,
+                'away_team_name': teams.get(away_team_id, {}).get('team_name', a_team_name),
                 'away_score': away_score,
                 'away_optimal': away_optimal,
                 'away_top_player': away_highlights['top_starter'],
@@ -782,11 +945,18 @@ def process_data(data):
     # Calculate standings
     standings = sorted(teams.values(), key=lambda x: (x['wins'], x['points_for']), reverse=True)
     
-    # Calculate power rankings with week-over-week changes
-    power_rankings = get_power_rankings_with_changes(data, teams, matchup_period)
-
     # Calculate historical record milestones and playoff odds
     historical_milestones = compute_historical_milestones(matchup_period, standings)
+
+    # Calculate power rankings with week-over-week changes and playoff odds
+    power_rankings = get_power_rankings_with_changes(data, teams, matchup_period, historical_milestones)
+
+    # Calculate weekly awards (Top Dog, Lucky Charm, Sacko Watch, Benchwarmer)
+    weekly_awards = compute_weekly_awards({
+        'matchups': matchups,
+        'high_score': week_high_score,
+        'high_scorer_team': high_scorer_team
+    }, week_rosters, matchup_period, teams)
 
     print(f"FINAL: top_player='{top_player}' top_player_score={top_player_score} best_waiver='{best_waiver_player}' best_waiver_score={best_waiver_score}")
     return {
@@ -795,6 +965,7 @@ def process_data(data):
         'standings': standings,
         'power_rankings': power_rankings,
         'historical_milestones': historical_milestones,
+        'weekly_awards': weekly_awards,
         'career_stats': career_stats,
         'high_scorer_team': high_scorer_team,
         'high_score': week_high_score,
@@ -859,13 +1030,7 @@ def generate_summary_with_ai(stats):
     6. Card: "MATCHUP SPOTLIGHTS": Quick 1-2 sentence analytical roasts/praise for each of the remaining matchups.
        - Always format matchup headers cleanly with "vs." (e.g. <strong>Gregory vs. Thomas:</strong>). NEVER use tennis/sports-wire shorthand like "d." or "def." for defeated; always use "vs." for matchup headings.
        - Conversationally weave in their rivalry history or matchup storylines (never list or quote records robotically).
-    7. Card: "THE DAVID HAKALO LUCK REPORT" (MANDATORY — include EVERY single week, no exceptions): Write a creative, funny 2-3 sentence roast specifically about how lucky David Hakalo is at fantasy football. This must ALWAYS appear regardless of whether David won or lost this week. Use a fresh angle each time — some ideas:
-       - If David won: how he probably stumbled into it, got bailed out by a garbage-time score, a kicker, or his opponent's star player getting hurt at the worst moment.
-       - If David lost: even in defeat, highlight some absurd lucky element — maybe he still scored more than he deserved, or his bench somehow outscored his starters.
-       - Reference his career record, blowout losses suffered, or all-time H2H dominance as evidence of either dumb luck or cosmic blessing.
-       - Get creative with the framing each week — "David's luck is so strong he probably found a $20 in his pocket after losing." Give it a different comedic voice every week. Never repeat the same joke structure.
-       Use this week's matchup data AND the career stats provided to ground the roast in real numbers.
-    8. Card: "WHAT HISTORY SAYS: PLAYOFF PROJECTIONS": Break down what 15 seasons of league history (2011–2025, 180 total team-seasons) say about where managers stand based on their current records through Week {stats['week']}.
+    7. Card: "WHAT HISTORY SAYS: PLAYOFF PROJECTIONS": Break down what 15 seasons of league history (2011–2025, 180 total team-seasons) say about where managers stand based on their current records through Week {stats['week']}.
        - Use the exact numbers from the Historical Record Milestones provided.
        - Highlight the historical playoff and championship odds for the undefeated teams, winless teams, and the middle-tier battle.
        - Reference any historical cautionary tales (like 2019 Dan Brunette missing the playoffs after a 4-0 start) or miracle comebacks (like 2013 Tom Crane rallying from 0-4 to the #3 seed) from the notes.
@@ -899,11 +1064,271 @@ def generate_summary_with_ai(stats):
         text = re.sub(r'\b([A-Z][a-z0-9]+(?:\s+[A-Z][a-z0-9]+)?)\s+(?:d\.|def\.)\s+([A-Z][a-z0-9]+(?:\s+[A-Z][a-z0-9]+)?)\b', r'\1 vs. \2', text)
         # Strip stray quotation marks around H2H records (e.g. "Blair leads 9-8" -> Blair leads 9-8)
         text = re.sub(r'(?<!=)[\"“\u201c\u201d]([A-Za-z\s]*(?:leads|lead|tied|trails|trail|deadlocked)\s+\d+-\d+(?:-\d+)?)[\"”\u201c\u201d]', r'\1', text, flags=re.IGNORECASE)
+        # Strip any Dave Hakalo luck report card if inadvertently produced
+        text = re.sub(r'<div[^>]*>\s*<div[^>]*>[^<]*LUCK REPORT[^<]*</div>.*?</div>\s*</div>', '', text, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r'\*\*(.*?)\*\*', r'<strong style="color: #0f1f18;">\1</strong>', text)
         return text.strip()
     except Exception as e:
         print(f"Error calling Gemini API: {e}")
         return "<p style='color: #d6a75c;'><em>Error generating AI summary.</em></p>"
+
+def build_power_rankings_leader_card(stats):
+    pr = stats.get('power_rankings', [])
+    if not pr:
+        return ""
+    
+    leader = pr[0]
+    bottom = pr[-1]
+    
+    risers = [t for t in pr if t.get('diff', 0) > 0]
+    fallers = [t for t in pr if t.get('diff', 0) < 0]
+    
+    riser = max(risers, key=lambda x: x.get('diff', 0)) if risers else None
+    faller = min(fallers, key=lambda x: x.get('diff', 0)) if fallers else None
+    
+    # Leader headline
+    leader_name = html.unescape(leader.get('team_name', leader.get('name', '')))
+    if leader.get('diff', 0) > 0 or not leader.get('has_prev', False):
+        headline = f"👑 {leader_name} takes over the top spot"
+    else:
+        headline = f"👑 {leader_name} holds the top spot"
+        
+    # Tiles
+    if riser:
+        riser_name = html.unescape(riser.get('team_name', riser.get('name', '')))
+        riser_badge = f"&#9650; {riser['diff']}"
+        riser_sub = f"{riser_name}, up to #{riser['rank']}"
+    else:
+        riser_badge = "&mdash; 0"
+        riser_sub = "No climbers this week"
+        
+    if faller:
+        faller_name = html.unescape(faller.get('team_name', faller.get('name', '')))
+        faller_badge = f"&#9660; {abs(faller['diff'])}"
+        faller_sub = f"{faller_name}, biggest fall"
+    else:
+        faller_badge = "&mdash; 0"
+        faller_sub = "No drops this week"
+
+    # Helper to find team's matchup
+    def find_matchup(owner_name):
+        for m in stats.get('matchups', []):
+            if m.get('home_team') == owner_name:
+                won = m.get('winner') == owner_name
+                margin = abs(m.get('home_score', 0) - m.get('away_score', 0))
+                opp = html.unescape(m.get('away_team_name', m.get('away_team', 'their opponent')))
+                return won, margin, opp
+            elif m.get('away_team') == owner_name:
+                won = m.get('winner') == owner_name
+                margin = abs(m.get('home_score', 0) - m.get('away_score', 0))
+                opp = html.unescape(m.get('home_team_name', m.get('home_team', 'their opponent')))
+                return won, margin, opp
+        return False, 0, 'their opponent'
+
+    # Leader commentary
+    l_won, l_margin, l_opp = find_matchup(leader.get('name'))
+    leader_pf = int(round(leader.get('pf', 0)))
+    if l_won:
+        l_result_str = f"they just beat {l_opp} by <strong>{int(round(l_margin))}</strong> points"
+    else:
+        l_result_str = f"despite a <strong>{int(round(l_margin))}</strong>-point loss to {l_opp}"
+        
+    l_diff = leader.get('diff', 0)
+    if l_diff > 0:
+        l_climb_str = f"They climbed <strong>{l_diff}</strong> spot{'s' if l_diff > 1 else ''} to get here"
+    elif l_diff == 0:
+        l_climb_str = "They held onto the top spot for another week"
+    else:
+        l_climb_str = "They seized the top spot"
+        
+    leader_blurb = f"<strong>{leader.get('record', '')}</strong> through {stats.get('week', '')} weeks with <strong>{leader_pf}</strong> points scored, and {l_result_str}. {l_climb_str}. Congratulations on the target now painted on your back."
+
+    # Bottom team commentary
+    bottom_name = html.unescape(bottom.get('team_name', bottom.get('name', '')))
+    b_won, b_margin, b_opp = find_matchup(bottom.get('name'))
+    if b_won:
+        b_result_str = f"fresh off a <strong>{int(round(b_margin))}</strong>-point win over {b_opp}"
+    else:
+        b_result_str = f"fresh off a <strong>{int(round(b_margin))}</strong>-point loss to {b_opp}"
+        
+    bottom_blurb = f"Down at the bottom: <strong>{bottom_name}</strong>, <strong>{bottom.get('record', '')}</strong>, {b_result_str}. Somebody take their phone away before they make a trade."
+
+    return f"""
+    <!-- Power Rankings Leader & Movers -->
+    <div style="margin: 32px 0 20px 4px;">
+      <div style="color: #d6a75c; font-size: 11px; font-weight: 800; letter-spacing: 2.5px; text-transform: uppercase; margin-bottom: 8px;">
+        WEEK {stats.get('week')} &bull; POWER RANKINGS LEADER
+      </div>
+      <div style="color: #ffffff; font-family: Georgia, -apple-system, serif; font-size: 24px; font-weight: 700; line-height: 1.3; margin: 0 0 18px 0;">
+        {headline}
+      </div>
+      
+      <!-- Metric Tiles -->
+      <table style="width: 100%; border-collapse: separate; border-spacing: 12px 0; margin: 0 0 20px -6px; table-layout: fixed;">
+        <tr>
+          <td style="background-color: #26272c; border-radius: 12px; padding: 16px 14px; vertical-align: top; width: 50%;">
+            <div style="font-size: 18px; margin-bottom: 8px;">📈</div>
+            <div style="color: #48c774; font-size: 28px; font-weight: 800; line-height: 1; margin-bottom: 6px;">{riser_badge}</div>
+            <div style="color: #9aa59f; font-size: 13px; font-weight: 500; line-height: 1.3;">{riser_sub}</div>
+          </td>
+          <td style="background-color: #26272c; border-radius: 12px; padding: 16px 14px; vertical-align: top; width: 50%;">
+            <div style="font-size: 18px; margin-bottom: 8px;">📉</div>
+            <div style="color: #f87171; font-size: 28px; font-weight: 800; line-height: 1; margin-bottom: 6px;">{faller_badge}</div>
+            <div style="color: #9aa59f; font-size: 13px; font-weight: 500; line-height: 1.3;">{faller_sub}</div>
+          </td>
+        </tr>
+      </table>
+
+      <!-- Blurbs -->
+      <p style="color: #d0d7d3; font-size: 15px; line-height: 1.6; margin: 0 0 16px 0;">
+        {leader_blurb}
+      </p>
+      <p style="color: #d0d7d3; font-size: 15px; line-height: 1.6; margin: 0;">
+        {bottom_blurb}
+      </p>
+    </div>
+    """
+
+def build_power_rankings_table_card(stats):
+    rows_html = ""
+    for team in stats.get('power_rankings', []):
+        diff = team.get('diff', 0)
+        has_prev = team.get('has_prev', False)
+        if has_prev:
+            if diff > 0:
+                change_html = f'<span style="color: #137333; font-weight: 800; font-size: 11px; margin-left: 4px;">&#9650;{diff}</span>'
+            elif diff < 0:
+                change_html = f'<span style="color: #c5221f; font-weight: 800; font-size: 11px; margin-left: 4px;">&#9660;{abs(diff)}</span>'
+            else:
+                change_html = '<span style="color: #728078; font-weight: 600; font-size: 11px; margin-left: 4px;">&mdash;</span>'
+        else:
+            change_html = '<span style="color: #728078; font-weight: 600; font-size: 11px; margin-left: 4px;">&mdash;</span>'
+
+        t_name = html.unescape(team.get('team_name', team.get('name', '')))
+        po_pct = int(round(team.get('playoff_pct', 50)))
+        pf_rank = team.get('pf_rank', '')
+
+        rows_html += f"""
+        <tr>
+          <td style="width: 28px; padding: 12px 4px; border-bottom: 1px solid rgba(156, 120, 54, 0.2); vertical-align: top; font-family: Georgia, serif; font-size: 17px; font-weight: 700; color: #725624;">
+            {team['rank']}
+          </td>
+          <td style="padding: 12px 6px; border-bottom: 1px solid rgba(156, 120, 54, 0.2); vertical-align: top;">
+            <div style="font-size: 15px; font-weight: 700; color: #0f1f18; line-height: 1.3;">
+              {t_name}
+            </div>
+            <div style="font-size: 12px; color: #3d5045; margin-top: 3px;">
+              {team.get('record', '')} &bull; {pf_rank} {change_html}
+            </div>
+          </td>
+          <td style="width: 70px; padding: 12px 4px; border-bottom: 1px solid rgba(156, 120, 54, 0.2); text-align: right; vertical-align: top; font-family: Georgia, serif; font-size: 18px; font-weight: 800; color: #112019;">
+            {po_pct}%
+          </td>
+        </tr>
+        """
+
+    return f"""
+    <!-- Power Rankings Table Card -->
+    <div style="background-color: #cde8da; border-radius: 16px; padding: 22px 20px; margin-bottom: 24px;">
+      <div style="font-size: 22px; font-family: Georgia, serif; font-weight: 700; color: #112019; margin-bottom: 6px;">
+        📊 Power rankings
+      </div>
+      <p style="color: #2a3d33; font-size: 13px; line-height: 1.5; margin: 0 0 16px 0;">
+        Ranked on record, scoring, recent form and the schedule ahead. The odds play out the rest of the regular season 5,000 times, and the top 6 make the playoffs.
+      </p>
+      <div style="text-align: right; font-size: 11px; font-weight: 800; letter-spacing: 1.5px; color: #55675e; text-transform: uppercase; margin-bottom: 8px; padding-right: 4px;">
+        PLAYOFFS
+      </div>
+      <table style="width: 100%; border-collapse: collapse;">
+        <tbody>
+          {rows_html}
+        </tbody>
+      </table>
+    </div>
+    """
+
+def build_weekly_awards_card(stats):
+    awards = stats.get('weekly_awards', {})
+    if not awards:
+        return ""
+        
+    top_dog = awards.get('top_dog', {})
+    lucky = awards.get('lucky_charm', {})
+    sacko = awards.get('sacko', {})
+    bench = awards.get('benchwarmer', {})
+    
+    top_dog_team = html.unescape(top_dog.get('team_name', ''))
+    lucky_team = html.unescape(lucky.get('team_name', ''))
+    lucky_loser = html.unescape(lucky.get('loser_team', ''))
+    sacko_team = html.unescape(sacko.get('team_name', ''))
+    bench_team = html.unescape(bench.get('team_name', ''))
+    
+    return f"""
+    <!-- Weekly Awards Card -->
+    <div style="background-color: #cde8da; border-radius: 16px; padding: 22px 20px; margin-bottom: 24px;">
+      <div style="font-size: 22px; font-family: Georgia, serif; font-weight: 700; color: #112019; margin-bottom: 16px;">
+        🏆 Weekly awards
+      </div>
+
+      <!-- Top Dog -->
+      <div style="background-color: #badccb; border-radius: 14px; padding: 16px; margin-bottom: 14px;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="width: 58px; vertical-align: top; padding-right: 14px;">
+              <img src="{top_dog.get('headshot', '')}" width="52" height="52" style="width: 52px; height: 52px; border-radius: 50%; border: 2px solid #2ea043; display: block; object-fit: cover; background-color: #ffffff;" alt="{html.escape(top_dog.get('player_name', ''), quote=True)}" />
+            </td>
+            <td style="vertical-align: top;">
+              <div style="font-size: 11px; font-weight: 800; letter-spacing: 1.5px; color: #725624; text-transform: uppercase; margin-bottom: 5px;">
+                🐶 TOP DOG
+              </div>
+              <div style="font-size: 14px; line-height: 1.55; color: #1a2e24;">
+                <strong style="color: #0f1f18;">{top_dog_team}</strong> put up <strong style="color: #0f1f18;">{int(round(top_dog.get('score', 0)))}</strong>, the most in the league. <strong style="color: #0f1f18;">{top_dog.get('player_name', '')}</strong> had <strong style="color: #0f1f18;">{int(round(top_dog.get('player_pts', 0)))}</strong> of it. It moved them to a <strong style="color: #0f1f18;">{top_dog.get('record', '')}</strong> record, which feels like a typo.
+              </div>
+            </td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Lucky Charm -->
+      <div style="background-color: #badccb; border-radius: 14px; padding: 16px; margin-bottom: 14px;">
+        <div style="font-size: 11px; font-weight: 800; letter-spacing: 1.5px; color: #725624; text-transform: uppercase; margin-bottom: 5px;">
+          ☘️ THE LUCKY CHARM AWARD
+        </div>
+        <div style="font-size: 14px; line-height: 1.55; color: #1a2e24;">
+          <strong style="color: #0f1f18;">{lucky_team}</strong> scored <strong style="color: #0f1f18;">{int(round(lucky.get('score', 0)))}</strong>, a number {lucky.get('teams_beat', '')} teams beat this week, then drew <strong style="color: #0f1f18;">{lucky_loser}</strong>, who managed <strong style="color: #0f1f18;">{int(round(lucky.get('loser_score', 0)))}</strong>. They'll tell you that was the plan.
+        </div>
+      </div>
+
+      <!-- Sacko Watch -->
+      <div style="background-color: #badccb; border-radius: 14px; padding: 16px; margin-bottom: 14px;">
+        <div style="font-size: 11px; font-weight: 800; letter-spacing: 1.5px; color: #725624; text-transform: uppercase; margin-bottom: 5px;">
+          🚽 SACKO WATCH
+        </div>
+        <div style="font-size: 14px; line-height: 1.55; color: #1a2e24;">
+          <strong style="color: #0f1f18;">{sacko_team}</strong> fell to <strong style="color: #0f1f18;">{sacko.get('record', '')}</strong> with <strong style="color: #0f1f18;">{int(round(sacko.get('score', 0)))}</strong> points, the lowest in the league. It's early, but the Sacko has a favorite.
+        </div>
+      </div>
+
+      <!-- Benchwarmer -->
+      <div style="background-color: #badccb; border-radius: 14px; padding: 16px;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="width: 58px; vertical-align: top; padding-right: 14px;">
+              <img src="{bench.get('headshot', '')}" width="52" height="52" style="width: 52px; height: 52px; border-radius: 50%; border: 2px solid #725624; display: block; object-fit: cover; background-color: #ffffff;" alt="{html.escape(bench.get('player_name', ''), quote=True)}" />
+            </td>
+            <td style="vertical-align: top;">
+              <div style="font-size: 11px; font-weight: 800; letter-spacing: 1.5px; color: #725624; text-transform: uppercase; margin-bottom: 5px;">
+                🪑 BENCHWARMER OF THE WEEK
+              </div>
+              <div style="font-size: 14px; line-height: 1.55; color: #1a2e24;">
+                <strong style="color: #0f1f18;">{bench.get('player_name', '')}</strong> scored <strong style="color: #0f1f18;">{int(round(bench.get('points', 0)))}</strong> points on <strong style="color: #0f1f18;">{bench_team}</strong>'s bench. That one hurts.
+              </div>
+            </td>
+          </tr>
+        </table>
+      </div>
+    </div>
+    """
 
 def build_email_html(stats, ai_html):
     print(f"BUILD_EMAIL: top_player='{stats.get('top_player')}' score={stats.get('top_player_score')}")
@@ -980,30 +1405,9 @@ def build_email_html(stats, ai_html):
         </tr>
         """
 
-    power_rankings_rows = ""
-    for idx, team in enumerate(stats.get('power_rankings', [])):
-        diff = team.get('diff', 0)
-        has_prev = team.get('has_prev', False)
-        if has_prev:
-            if diff > 0:
-                change_html = f'<span style="color: #2ea043; font-weight: 700; font-size: 11px; margin-left: 4px;">&#9650;{diff}</span>'
-            elif diff < 0:
-                change_html = f'<span style="color: #cf222e; font-weight: 700; font-size: 11px; margin-left: 4px;">&#9660;{abs(diff)}</span>'
-            else:
-                change_html = '<span style="color: #728078; font-weight: 600; font-size: 11px; margin-left: 4px;">&mdash;</span>'
-        else:
-            change_html = '<span style="color: #728078; font-weight: 600; font-size: 11px; margin-left: 4px;">&mdash;</span>'
-
-        tot_pts = team['total_pts']
-        pts_str = f"{int(tot_pts)}" if tot_pts == int(tot_pts) else f"{tot_pts:.1f}"
-
-        power_rankings_rows += f"""
-        <tr>
-          <td style="padding: 8px 4px; border-bottom: 1px solid rgba(156, 120, 54, 0.2); font-weight: 700; color: #725624; white-space: nowrap;">{team['rank']} {change_html}</td>
-          <td style="padding: 8px 4px; border-bottom: 1px solid rgba(156, 120, 54, 0.2); font-weight: 600; color: #0f1f18;">{team['name']}</td>
-          <td style="padding: 8px 4px; border-bottom: 1px solid rgba(156, 120, 54, 0.2); text-align: right; font-weight: 700; color: #112019;">{pts_str}</td>
-        </tr>
-        """
+    power_rankings_leader_html = build_power_rankings_leader_card(stats)
+    power_rankings_table_html = build_power_rankings_table_card(stats)
+    weekly_awards_html = build_weekly_awards_card(stats)
 
     # Historical milestones table rows
     historical_milestone_rows = ""
@@ -1106,30 +1510,11 @@ def build_email_html(stats, ai_html):
       </table>
     </div>
 
-    <!-- Superlatives -->
-    <div style="color: #d6a75c; font-size: 13px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; margin: 28px 0 12px 4px;">
-      WEEKLY SUPERLATIVES
-    </div>
-    <div style="background-color: #cde8da; border-left: 5px solid #9c7836; border-radius: 12px; padding: 18px 22px; margin-bottom: 22px;">
-      <div style="color: #725624; font-size: 13px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px;">
-        HONORS &amp; HEARTBREAKS
-      </div>
-      <p style="margin: 0 0 8px 0; color: #1a2e24; font-size: 15px; line-height: 1.6;">
-        <strong style="color: #0f1f18;">High Roller:</strong> {stats['high_scorer_team']} ({stats['high_score']:.2f} pts)
-      </p>
-      <p style="margin: 0 0 8px 0; color: #1a2e24; font-size: 15px; line-height: 1.6;">
-        <strong style="color: #0f1f18;">MVP of the Week:</strong> {stats['top_player']} ({stats['top_player_score']:.2f} pts)
-      </p>
-      <p style="margin: 0 0 8px 0; color: #1a2e24; font-size: 15px; line-height: 1.6;">
-        <strong style="color: #0f1f18;">Massacre of the Week:</strong> {stats['biggest_winner']} (Won by {stats['biggest_margin']:.2f} pts)
-      </p>
-      <p style="margin: 0 0 8px 0; color: #1a2e24; font-size: 15px; line-height: 1.6;">
-        <strong style="color: #0f1f18;">Cardiac Finish:</strong> {stats['closest_winner']} (Won by {stats['closest_margin']:.2f} pts)
-      </p>
-      <p style="margin: 0; color: #1a2e24; font-size: 15px; line-height: 1.6;">
-        <strong style="color: #0f1f18;">Top Free Agent / Waiver:</strong> {waiver_text}
-      </p>
-    </div>
+    {power_rankings_leader_html}
+
+    {power_rankings_table_html}
+
+    {weekly_awards_html}
 
     <!-- Editorial Recap (AI Generated Cards) -->
     <div style="color: #d6a75c; font-size: 13px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; margin: 28px 0 12px 4px;">
@@ -1171,31 +1556,7 @@ def build_email_html(stats, ai_html):
       </table>
     </div>
 
-    <!-- Power Rankings Table -->
-    <div style="color: #d6a75c; font-size: 13px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; margin: 28px 0 12px 4px;">
-      POWER RANKINGS
-    </div>
-    <div style="background-color: #cde8da; border-left: 5px solid #9c7836; border-radius: 12px; padding: 18px 22px; margin-bottom: 22px;">
-      <div style="color: #725624; font-size: 13px; font-weight: 800; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 12px;">
-        WEEK {stats['week']} POWER RANKINGS
-      </div>
-      <table style="width: 100%; border-collapse: collapse; color: #1a2e24; font-size: 14px;">
-        <thead>
-          <tr style="border-bottom: 2px solid #9c7836; text-align: left;">
-            <th style="padding: 8px 4px; color: #725624; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">#</th>
-            <th style="padding: 8px 4px; color: #725624; font-size: 11px; text-transform: uppercase; letter-spacing: 1px;">Team</th>
-            <th style="padding: 8px 4px; color: #725624; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; text-align: right;">Power Pts</th>
-          </tr>
-        </thead>
-        <tbody>
-          {power_rankings_rows}
-        </tbody>
-      </table>
-    </div>
-
     {historical_card}
-
-
 
   </div>
 </body>
