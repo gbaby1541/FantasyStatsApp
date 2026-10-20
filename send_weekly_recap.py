@@ -805,6 +805,8 @@ def process_data(data):
     matchups = []
     week_high_score = 0
     high_scorer_team = "None"
+    week_low_score = 9999.0
+    lowest_scorer_team = "None"
     top_player = "None"
     top_player_score = 0
     biggest_winner = "None"
@@ -833,6 +835,13 @@ def process_data(data):
             if away_score > week_high_score:
                 week_high_score = away_score
                 high_scorer_team = teams.get(away_team_id, {}).get('name', 'Unknown')
+
+            if home_score > 0 and home_score < week_low_score:
+                week_low_score = home_score
+                lowest_scorer_team = teams.get(home_team_id, {}).get('name', 'Unknown')
+            if away_score > 0 and away_score < week_low_score:
+                week_low_score = away_score
+                lowest_scorer_team = teams.get(away_team_id, {}).get('name', 'Unknown')
                 
             winner_id = game.get('winner')
             if winner_id == 'HOME':
@@ -974,6 +983,8 @@ def process_data(data):
         'career_stats': career_stats,
         'high_scorer_team': high_scorer_team,
         'high_score': week_high_score,
+        'lowest_scorer_team': lowest_scorer_team,
+        'lowest_score': week_low_score,
         'top_player': top_player,
         'top_player_score': top_player_score,
         'biggest_winner': biggest_winner,
@@ -1011,6 +1022,7 @@ def generate_summary_with_ai(stats):
 
     Weekly Superlatives:
     - High Scorer: {stats['high_scorer_team']} ({stats['high_score']:.2f} pts)
+    - Lowest Scorer (The Wooden Spoon): {stats['lowest_scorer_team']} ({stats['lowest_score']:.2f} pts)
     - Top Individual Player: {stats['top_player']} ({stats['top_player_score']:.2f} pts)
     - Biggest Blowout: {stats['biggest_winner']} (Margin: {stats['biggest_margin']:.2f} pts)
     - Closest Game: {stats['closest_winner']} (Margin: {stats['closest_margin']:.2f} pts)
@@ -1029,7 +1041,7 @@ def generate_summary_with_ai(stats):
 
     REQUIRED EDITORIAL SECTIONS (Write engaging content for each):
     1. Card: "THE OPENING SALVO" (or "WEEK {stats['week']} HEADLINER"): 1-2 punchy paragraphs capturing the theme of the week, surprising blowouts, and standout highs.
-    2. Card: "THE WOODEN SPOON DEBATE": Roast the lowest scoring team or the most embarrassing blowout of the week. Reference their career stats or blowout losses from the career data provided.
+    2. Card: "THE WOODEN SPOON DEBATE": Roast the official lowest scoring manager of the week: {stats['lowest_scorer_team']} ({stats['lowest_score']:.2f} pts). DO NOT mistakenly claim anyone else had the lowest score. Reference their career stats, roster struggles, or blowout losses from the career data provided.
     3. Standalone Heading: <div style="color: #d6a75c; font-size: 13px; font-weight: 800; letter-spacing: 2.5px; text-transform: uppercase; margin: 32px 0 14px 4px;">GRUDGES TO SETTLE</div>
     4. Card: "RIVALRIES & CLOSE SHAVES": Highlight the nail-biters and rivalry matchups. Weave in their all-time rivalry history naturally.
     5. Card: "BENCH REGRETS & NIGHTMARES": Roast any manager who left game-changing points on their bench.
