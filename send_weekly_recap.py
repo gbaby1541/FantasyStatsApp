@@ -1571,7 +1571,10 @@ def send_email(subject, html_content):
         print(html_content)
         return
         
-    recipients = [email.strip() for email in RECIPIENT_EMAILS.split(',') if email.strip()]
+    if TEST_EMAIL:
+        recipients = [TEST_EMAIL.strip()]
+    else:
+        recipients = [email.strip() for email in RECIPIENT_EMAILS.split(',') if email.strip()]
     
     msg = MIMEMultipart("alternative")
     msg['Subject'] = subject
